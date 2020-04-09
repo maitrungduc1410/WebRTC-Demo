@@ -1,6 +1,8 @@
 # WebRTC-Demo
 A fully WebRTC demo on Web, Android and iOS
 
+![Demo WebRTC](./demo.gif "Demo WebRTC")
+
 # Prerequistes
  - You need `NodeJS` installed. To check: run command `node -v` in terminal. If you haven't installed yet. Search Google to install based in your OS
  - Android Studio and an Android device (if you want to test with Android)
