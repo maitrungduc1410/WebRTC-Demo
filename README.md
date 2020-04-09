@@ -9,13 +9,15 @@ A fully WebRTC demo on Web, Android and iOS
  
 # How to run
 ### Start signaling server
-- First you need to start the signaling server, Open terminal at `node-server` and run:
+First you need to start the signaling server, Open terminal at `node-server` and run:
 ```
+npm install # or yarn install (to install dependencies)
 npm run dev # or yarn dev
 ```
 ### Start web client
 - To start web client, open terminal at `web-client` and run:
 ```
+npm install # or yarn install (to install dependencies)
 npm run server # or yarn server
 ```
 - Then open 2 tabs on browser at `localhost:8080` join in same roomID and do some hacks
