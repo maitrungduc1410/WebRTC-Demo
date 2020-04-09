@@ -17,7 +17,7 @@ import org.webrtc.VideoRenderer;
 import org.webrtc.VideoRendererGui;
 import android.view.WindowManager.LayoutParams;
 
-public class CallActivity extends AppCompatActivity implements WebRtcClient.RtcListener {
+public class CallActivity extends AppCompatActivity implements PeerConnectionClient.RtcListener {
     private static final String VIDEO_CODEC_VP9 = "VP9";
     private static final String AUDIO_CODEC_OPUS = "opus";
     // Local preview screen position before call is connected.
@@ -39,7 +39,7 @@ public class CallActivity extends AppCompatActivity implements WebRtcClient.RtcL
     private GLSurfaceView vsv;
     private VideoRenderer.Callbacks localRender;
     private VideoRenderer.Callbacks remoteRender;
-    private WebRtcClient client;
+    private PeerConnectionClient peerConnectionClient;
     private String mSocketAddress;
     private String roomId;
 
@@ -112,10 +112,10 @@ public class CallActivity extends AppCompatActivity implements WebRtcClient.RtcL
                 true
         );
 
-        client = new WebRtcClient(roomId, this, mSocketAddress, params, VideoRendererGui.getEGLContext());
+        peerConnectionClient = new PeerConnectionClient(roomId, this, mSocketAddress, params, VideoRendererGui.getEGLContext());
 
         if (PermissionChecker.hasPermissions(this, RequiredPermissions)) {
-            client.start();
+            peerConnectionClient.start();
         }
     }
 
@@ -123,8 +123,8 @@ public class CallActivity extends AppCompatActivity implements WebRtcClient.RtcL
     public void onPause() {
         super.onPause();
         vsv.onPause();
-        if (client != null) {
-            client.onPause();
+        if (peerConnectionClient != null) {
+            peerConnectionClient.onPause();
         }
     }
 
@@ -132,15 +132,15 @@ public class CallActivity extends AppCompatActivity implements WebRtcClient.RtcL
     public void onResume() {
         super.onResume();
         vsv.onResume();
-        if (client != null) {
-            client.onResume();
+        if (peerConnectionClient != null) {
+            peerConnectionClient.onResume();
         }
     }
 
     @Override
     public void onDestroy() {
-        if (client != null) {
-            client.onDestroy();
+        if (peerConnectionClient != null) {
+            peerConnectionClient.onDestroy();
         }
         super.onDestroy();
     }
