@@ -23,8 +23,8 @@ import org.webrtc.VideoSource;
 import java.net.URISyntaxException;
 import java.util.LinkedList;
 
-public class WebRtcClient {
-    private final static String TAG = WebRtcClient.class.getCanonicalName();
+public class PeerConnectionClient {
+    private final static String TAG = PeerConnectionClient.class.getCanonicalName();
     private PeerConnectionFactory factory;
     private LinkedList<PeerConnection.IceServer> iceServers = new LinkedList<>();
     private PeerConnectionParameters pcParams;
@@ -32,7 +32,7 @@ public class WebRtcClient {
     private MediaStream localMS;
     private VideoSource videoSource;
     private RtcListener mListener;
-    private Socket client;
+    private Socket socketClient;
     private Peer peer;
     private String roomId;
 
@@ -55,13 +55,11 @@ public class WebRtcClient {
         private Emitter.Listener onConnect = new Emitter.Listener() {
             @Override
             public void call(Object... args) {
-                Log.d("SOCKET", "CONNNECCTTTT");
                 JSONObject obj = new JSONObject();
                 try {
                     obj.put("roomId", roomId);
-                    client.emit("join room", obj);
+                    socketClient.emit("join room", obj);
                 } catch (JSONException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
             }
@@ -78,7 +76,6 @@ public class WebRtcClient {
 
                     mListener.onMessage(message);
                 } catch (JSONException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
             }
@@ -157,7 +154,6 @@ public class WebRtcClient {
 
         @Override
         public void onCreateSuccess(final SessionDescription sdp) {
-            // TODO: modify sdp to use pcParams prefered codecs
             try {
                 pc.setLocalDescription(Peer.this, sdp);
 
@@ -170,9 +166,7 @@ public class WebRtcClient {
                 payload.put(sdp.type.canonicalForm(), desc);
                 payload.put("roomId", roomId);
 
-                client.emit(sdp.type.canonicalForm(), payload);
-
-                Log.d(TAG, "TYPEEEE: " + sdp.type.canonicalForm());
+                socketClient.emit(sdp.type.canonicalForm(), payload);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -224,7 +218,7 @@ public class WebRtcClient {
                 payload.put("iceCandidate", iceCandidate);
                 payload.put("roomId", roomId);
 
-                client.emit("new ice candidate", payload);
+                socketClient.emit("new ice candidate", payload);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -253,7 +247,7 @@ public class WebRtcClient {
         }
 
         Peer() {
-            Log.d(TAG, "new Peer: ");
+            Log.d(TAG, "new Peer created");
             this.pc = factory.createPeerConnection(iceServers, pcConstraints, this);
 
             pc.addStream(localMS); //, new MediaConstraints()
@@ -261,7 +255,7 @@ public class WebRtcClient {
         }
     }
 
-    public WebRtcClient(String roomId, RtcListener listener, String host, PeerConnectionParameters params, EGLContext mEGLcontext) {
+    public PeerConnectionClient(String roomId, RtcListener listener, String host, PeerConnectionParameters params, EGLContext mEGLcontext) {
         this.roomId = roomId;
         mListener = listener;
         pcParams = params;
@@ -271,19 +265,19 @@ public class WebRtcClient {
         MessageHandler messageHandler = new MessageHandler();
 
         try {
-            client = IO.socket(host);
+            socketClient = IO.socket(host);
         } catch (URISyntaxException e) {
             e.printStackTrace();
         }
-        client.on(Socket.EVENT_CONNECT, messageHandler.onConnect);
-        client.on("new user joined", messageHandler.onNewUserJoined);
-        client.on("offer", messageHandler.onOffer);
-        client.on("answer", messageHandler.onAnswer);
-        client.on("new ice candidate", messageHandler.onNewIceCandidate);
-        client.on(Socket.EVENT_DISCONNECT, messageHandler.onDisconnect);
-        client.on("message", messageHandler.onMessage);
+        socketClient.on(Socket.EVENT_CONNECT, messageHandler.onConnect);
+        socketClient.on("new user joined", messageHandler.onNewUserJoined);
+        socketClient.on("offer", messageHandler.onOffer);
+        socketClient.on("answer", messageHandler.onAnswer);
+        socketClient.on("new ice candidate", messageHandler.onNewIceCandidate);
+        socketClient.on(Socket.EVENT_DISCONNECT, messageHandler.onDisconnect);
+        socketClient.on("message", messageHandler.onMessage);
 
-        client.connect();
+        socketClient.connect();
 
         iceServers.add(new PeerConnection.IceServer("stun:23.21.150.121"));
         iceServers.add(new PeerConnection.IceServer("stun:stun.l.google.com:19302"));
@@ -312,12 +306,16 @@ public class WebRtcClient {
      */
     public void onDestroy() {
         android.os.Process.killProcess(android.os.Process.myPid()); // use this code as videoSource.dispose will cause app crash (but if comment that line we cannot start the video source again as access to camera is not released)
+
+//        // Ignore this section
 //        if (videoSource != null) {
 //            videoSource.dispose();
 //        }
+        // Ignore the section above
+
 //        factory.dispose();
-//        client.disconnect();
-//        client.close();
+//        socketClient.disconnect();
+//        socketClient.close();
     }
 
     /**
@@ -332,7 +330,7 @@ public class WebRtcClient {
     }
 
     private void setCamera() {
-        localMS = factory.createLocalMediaStream("ARDAMS");
+        localMS = factory.createLocalMediaStream("LOCAL_MS");
         if (pcParams.videoCallEnabled) {
             MediaConstraints videoConstraints = new MediaConstraints();
             videoConstraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", Integer.toString(pcParams.videoHeight)));
@@ -341,11 +339,11 @@ public class WebRtcClient {
             videoConstraints.mandatory.add(new MediaConstraints.KeyValuePair("minFrameRate", Integer.toString(pcParams.videoFps)));
 
             videoSource = factory.createVideoSource(getVideoCapturer(), videoConstraints);
-            localMS.addTrack(factory.createVideoTrack("ARDAMSv0", videoSource));
+            localMS.addTrack(factory.createVideoTrack("LOCAL_MS_VS", videoSource));
         }
 
         AudioSource audioSource = factory.createAudioSource(new MediaConstraints());
-        localMS.addTrack(factory.createAudioTrack("ARDAMSa0", audioSource));
+        localMS.addTrack(factory.createAudioTrack("LOCAL_MS_AT", audioSource));
 
         mListener.onLocalStream(localMS);
     }
