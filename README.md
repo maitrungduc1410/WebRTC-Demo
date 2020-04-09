@@ -17,4 +17,6 @@ npm run dev # or yarn dev
 npm run server # or yarn server
 ```
 - Then open 2 tabs on browser at `localhost:8080` join in same roomID and do some hacks
-- If you want play with Android, change the value of `serverAddress` in `/app/src/main/res/values/strings.xml` to your local IP and port of the server(can check by running `ifconfig`)
+
+Running with Android:
+Open `android-client` in Android Studio, change the value of `serverAddress` in `/app/src/main/res/values/strings.xml` to IP and port of your machine (can check by running `ifconfig` for Mac/Linux and `ipconfig` for Windows)
