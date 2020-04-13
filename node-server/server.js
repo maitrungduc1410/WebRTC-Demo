@@ -87,7 +87,7 @@ io.on("connection", socket => {
     }
   })
 
-  socket.on('leave room', data => { // use for web client
+  socket.on('leave room', data => { // use only for web client
     data.roomId = data.roomId.toString()
     const index = rooms.findIndex(room => room.id === data.roomId)
 
