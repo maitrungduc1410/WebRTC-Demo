@@ -23,6 +23,8 @@ npm install # or yarn install (to install dependencies)
 npm run serve # or yarn serve
 ```
 
+Then open 2 browsers at `localhost:8080` to test
+
 ### Android client 
 - Open `android-client` in Android Studio and wait for Gradle to be synced
 - Change the value of `serverAddress` in `/app/src/main/res/values/strings.xml` to IP of your machine (can check by running `ifconfig` for Mac/Linux and `ipconfig` for Windows). Keep port `4000`
