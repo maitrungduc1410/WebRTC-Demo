@@ -20,7 +20,7 @@ The usage of all clients are same, you just need to join clients in same room by
 - To start web client, open terminal at `web-client` and run:
 ```
 npm install # or yarn install (to install dependencies)
-npm run server # or yarn server
+npm run serve # or yarn serve
 ```
 
 ### Android client 
