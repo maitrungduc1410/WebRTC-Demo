@@ -82,6 +82,9 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
         }
         
         socket.connect()
+        
+        // Uncomment this if you want redirect audio to Speaker
+//        NotificationCenter.default.addObserver(self, selector: #selector(didSessionRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -148,6 +151,17 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
         localVideoView.subviews.last?.isUserInteractionEnabled = true
         self.view.addSubview(localVideoView)
     }
+    
+    // Uncomment this if you want redirect audio to Speaker
+//    @objc func didSessionRouteChange(_ notification: Notification) {
+//        guard let info = notification.userInfo,
+//            let value = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+//            let reason = AVAudioSession.RouteChangeReason(rawValue: value) else { return }
+//        switch reason {
+//            case .categoryChange: try? AVAudioSession.sharedInstance().overrideOutputAudioPort(.speaker)
+//            default: break
+//        }
+//    }
 }
 
 // MARK: - WebRTCClient Delegate
