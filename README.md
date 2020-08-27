@@ -14,15 +14,19 @@ First you need to start the signaling server, Open terminal at `node-server` and
 npm install # or yarn install (to install dependencies)
 npm run dev # or yarn dev
 ```
+Server will be listening at: `localhost:4000
 ## Start clients
 The usage of all clients are same, you just need to join clients in same room by input same roomID.
 ### Web client
 - To start web client, open terminal at `web-client` and run:
 ```
 npm install # or yarn install (to install dependencies)
-npm run server # or yarn server
+npm run serve # or yarn serve
 ```
-Note: audio from local and remote stream is disabled by default to remove Echo during call, if you want to turn on audio simply remove `muted` from 2 `<video>` element in `App.vue`
+Then open 2 browsers at `localhost:8080` to test
+
+> Note: audio from local and remote stream is disabled by default to remove Echo during call, if you want to turn on audio simply remove `muted` from 2 `<video>` element in `App.vue`
+
 ### Android client 
 - Open `android-client` in Android Studio and wait for Gradle to be synced
 - Change the value of `serverAddress` in `/app/src/main/res/values/strings.xml` to IP of your machine (can check by running `ifconfig` for Mac/Linux and `ipconfig` for Windows). Keep port `4000`
@@ -30,7 +34,7 @@ Note: audio from local and remote stream is disabled by default to remove Echo d
 ### iOS client
 - Open terminal at `ios-client` and run: `pod install` to install dependencies
 - Then `WebRTCDemo.xcworkspace` (NOT `WebRTCDemo.xcodeproj`, note the filename)
-- Change the URL string in `CallViewController` to your local IP and keep the port `4000`
+- Change the URL string in `CallViewController` to your local IP and keep the port `4000` (Eg: `http://192.168.1.129:4000`)
 
 # Note when develop with Android
 When develop, to get a detail debug information. Do the following:
