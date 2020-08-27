@@ -36,6 +36,8 @@ Then open 2 browsers at `localhost:8080` to test
 - Then `WebRTCDemo.xcworkspace` (NOT `WebRTCDemo.xcodeproj`, note the filename)
 - Change the URL string in `CallViewController` to your local IP and keep the port `4000` (Eg: `http://192.168.1.129:4000`)
 
+> By default audio will be played using internal microphone. If you want to play audio by Speaker (for louder sound). Then uncomment 2 sections in `CallViewController.swift` that I marked 
+
 # Note when develop with Android
 When develop, to get a detail debug information. Do the following:
 - Go to `/app/src/main/AndroidManifest.xml`, comment `android:process=":CallActivityProcess"` in `CallActivity`
