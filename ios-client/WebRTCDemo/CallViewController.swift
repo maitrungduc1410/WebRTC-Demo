@@ -83,7 +83,7 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
         
         socket.connect()
         
-        // Uncomment this if you want redirect audio to Speaker
+        // MARK: Uncomment this if you want redirect audio to Speaker
 //        NotificationCenter.default.addObserver(self, selector: #selector(didSessionRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
     }
     
@@ -152,7 +152,7 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
         self.view.addSubview(localVideoView)
     }
     
-    // Uncomment this if you want redirect audio to Speaker
+    // MARK: Uncomment this if you want redirect audio to Speaker
 //    @objc func didSessionRouteChange(_ notification: Notification) {
 //        guard let info = notification.userInfo,
 //            let value = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
