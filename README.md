@@ -22,7 +22,7 @@ The usage of all clients are same, you just need to join clients in same room by
 npm install # or yarn install (to install dependencies)
 npm run server # or yarn server
 ```
-
+Note: audio from local and remote stream is disabled by default to remove Echo during call, if you want to turn on audio simply remove `muted` from 2 `<video>` element in `App.vue`
 ### Android client 
 - Open `android-client` in Android Studio and wait for Gradle to be synced
 - Change the value of `serverAddress` in `/app/src/main/res/values/strings.xml` to IP of your machine (can check by running `ifconfig` for Mac/Linux and `ipconfig` for Windows). Keep port `4000`
