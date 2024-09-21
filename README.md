@@ -4,7 +4,7 @@
 
 <img src="images/android.jpeg" width="300" />
 <img src="images/ios.jpeg" width="300" />
-<img src="images/desktop.jpg" width="300" />
+<img src="images/desktop.jpg" width="600" />
 </div>
  
 # Features
