@@ -1,0 +1,4 @@
+<!-- res/drawable/red_button_background.xml -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/red_button_shape"/>
+</selector>

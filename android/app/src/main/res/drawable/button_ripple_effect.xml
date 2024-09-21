@@ -1,0 +1,7 @@
+<!-- res/drawable/button_ripple_effect.xml -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <shape android:shape="rectangle">
+        <solid android:color="@android:color/transparent"/>
+    </shape>
+</ripple>

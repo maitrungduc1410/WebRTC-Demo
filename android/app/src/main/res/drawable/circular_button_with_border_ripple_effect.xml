@@ -1,0 +1,8 @@
+<!-- res/drawable/circular_button_with_border_ripple_effect.xml -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <shape android:shape="rectangle">
+        <solid android:color="@android:color/transparent"/>
+        <corners android:radius="24dp"/> <!-- Adjust this to match the button's radius -->
+    </shape>
+</ripple>
