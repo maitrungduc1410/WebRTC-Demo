@@ -1,0 +1,7 @@
+<!-- res/drawable/circular_button_with_border_ripple.xml -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Ripple effect -->
+    <item android:drawable="@drawable/circular_button_with_border_ripple_effect" android:state_pressed="true"/>
+    <!-- Default state -->
+    <item android:drawable="@drawable/circular_button_with_border"/>
+</selector>

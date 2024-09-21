@@ -1,5 +1,0 @@
-<resources>
-    <string name="app_name">WebRTCDemoAndroid</string>
-    <string name="serverAddress">http://192.168.1.129:4000</string>
-<!--    <string name="port">443</string>-->
-</resources>

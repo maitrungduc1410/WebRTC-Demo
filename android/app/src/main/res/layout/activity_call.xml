@@ -1,0 +1,89 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/local_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        />
+
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/remote_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.google.android.flexbox.FlexboxLayout
+        android:id="@+id/button_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="16dp"
+        app:alignItems="center"
+        app:flexWrap="wrap"
+        app:justifyContent="center"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/toggle_audio"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circular_button_with_border_ripple"
+            android:src="@drawable/mic_slash_fill" />
+
+        <ImageButton
+            android:id="@+id/toggle_video"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circular_button_with_border_ripple"
+            android:src="@drawable/video_slash_fill" />
+
+        <ImageButton
+            android:id="@+id/switch_camera"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circular_button_with_border_ripple"
+            android:src="@drawable/arrow_triangle_2_circlepath_camera_fill" />
+
+        <ImageButton
+            android:id="@+id/toggle_speaker"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circular_button_with_border_ripple"
+            android:src="@drawable/speaker_wave_3_fill" />
+
+        <ImageButton
+            android:id="@+id/toggle_message"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circular_button_with_border_ripple"
+            android:src="@drawable/exclamationmark_bubble_fill"
+            />
+
+        <ImageButton
+            android:id="@+id/share_screen"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circular_button_with_border_ripple"
+            android:src="@drawable/tv_fill" />
+
+        <ImageButton
+            android:id="@+id/hang_up"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/red_button_background_ripple"
+            android:src="@drawable/phone_down_fill" />
+    </com.google.android.flexbox.FlexboxLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,58 +1,73 @@
 # WebRTC-Demo
-A fully WebRTC demo on Web, Android and iOS
+<div align="center">
+<h2>A comprehensive WebRTC demo on Web, Android and iOS</h2>
 
-![Demo WebRTC](./demo.gif "Demo WebRTC")
-
-# Prerequistes
- - You need `NodeJS` installed. To check: run command `node -v` in terminal. If you haven't installed yet. Search Google to install based in your OS
- - Android Studio and an Android device (if you want to test with Android)
+<img src="images/android.jpeg" width="300" />
+<img src="images/ios.jpeg" width="300" />
+<img src="images/desktop.jpg" width="300" />
+</div>
  
-# How to run
+# Features
+- Up-to-date with latest WebRTC API. Currently using M125
+- ✅ Audio control
+- ✅ Video control
+- ✅ Switch front/back camera
+- ✅ Switch between microphone vs Speaker
+- ✅ Send message using data channel
+- ✅ Screen sharing. All except iOS
+- Stream video file. In progress...
+- End to end encryption. In progress...
+
+# Disclaimer
+This is intended to show common use cases of WebRTC cross platforms and to give you some ideas, it may have bugs, use with caution!
+
+# Setup
 ## Start signaling server
-First you need to start the signaling server, Open terminal at `node-server` and run:
+First you need to start the signaling server, Open terminal at `signaling-server` and run:
 ```
 npm install # or yarn install (to install dependencies)
 npm run dev # or yarn dev
 ```
-Server will be listening at: `localhost:4000
+Once started the address of signling server will be printed in your terminal
+
 ## Start clients
 The usage of all clients are same, you just need to join clients in same room by input same roomID.
-### Web client
-- To start web client, open terminal at `web-client` and run:
+
+### Web
+To start web client, open terminal at `web` and run:
 ```
-npm install # or yarn install (to install dependencies)
-npm run serve # or yarn serve
+npm install
+
+npm run dev
 ```
-Then open 2 browsers at `localhost:8080` to test
+Then open 2 browsers at `localhost:5173` to test
 
-> Note: audio from local and remote stream is disabled by default to remove Echo during call, if you want to turn on audio simply remove `muted` from 2 `<video>` element in `App.vue`
+### Android 
 
-### Android client 
-- Open `android-client` in Android Studio and wait for Gradle to be synced
-- Change the value of `serverAddress` in `/app/src/main/res/values/strings.xml` to IP of your machine (can check by running `ifconfig` for Mac/Linux and `ipconfig` for Windows). Keep port `4000`
+Change the value of `serverAddress` in `android/app/src/main/res/values/strings.xml` to server IP which is printed when you start the signaling server
 
-### iOS client
-- Open terminal at `ios-client` and run: `pod install` to install dependencies
-- Then `WebRTCDemo.xcworkspace` (NOT `WebRTCDemo.xcodeproj`, note the filename)
-- Change the URL string in `CallViewController` to your local IP and keep the port `4000` (Eg: `http://192.168.1.129:4000`)
+### iOS
 
-> By default audio will be played using internal microphone. If you want to play audio by Speaker (for louder sound). Then uncomment 2 sections in `CallViewController.swift` that I marked 
-
-# Note when develop with Android
-When develop, to get a detail debug information. Do the following:
-- Go to `/app/src/main/AndroidManifest.xml`, comment `android:process=":CallActivityProcess"` in `CallActivity`
-- Go to `PeerConnectionClient.java`, in method `onDestroy`, change like below:
-```java
-public void onDestroy() {
-  factory.dispose();
-  socketClient.disconnect();
-  socketClient.close();
-}
-
-// If you finish developing, remember to change it back to initial setup like below
-// public void onDestroy() {
-//   android.os.Process.killProcess(android.os.Process.myPid());
-// }
-// And change the AndroidManifest.xml like before
+First run the following command in `ios` folder:
 ```
-- By doing this you'll get crash in some cases when you navigate back to previous activity and join room again, but you'll can easily debug your app during development
+pod install
+```
+
+Then change `SERVER_URL` in `CallViewController` to signaling server address
+
+# Troubleshooting
+
+## iOS - Compiling for iOS 11.0, but module...
+
+Change Minimum Deployments of the pod that has issue to latest
+
+<img src="images/ios_issue_1.jpeg" width="300" />
+
+## iOS - Sandbox: rsync.samba(13105)...
+
+<img src="images/ios_issue_2.png" width="300" />
+
+
+Solution: Update your Xcode project build option ENABLE_USER_SCRIPT_SANDBOXING to 'No'.
+
+<img src="images/ios_issue_2_solution.png" width="300" />

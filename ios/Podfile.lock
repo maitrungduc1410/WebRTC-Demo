@@ -1,0 +1,32 @@
+PODS:
+  - FlexLayout (2.0.10)
+  - PinLayout (1.10.5)
+  - Socket.IO-Client-Swift (16.1.0):
+    - Starscream (~> 4.0.6)
+  - Starscream (4.0.8)
+  - WebRTC-SDK (125.6422.04)
+
+DEPENDENCIES:
+  - FlexLayout
+  - PinLayout
+  - Socket.IO-Client-Swift (= 16.1.0)
+  - WebRTC-SDK (= 125.6422.04)
+
+SPEC REPOS:
+  trunk:
+    - FlexLayout
+    - PinLayout
+    - Socket.IO-Client-Swift
+    - Starscream
+    - WebRTC-SDK
+
+SPEC CHECKSUMS:
+  FlexLayout: ea94491c923485f7f28891cb5b10245d22df380b
+  PinLayout: f6c2b63a5a5b24864064e1d15c67de41b4e74748
+  Socket.IO-Client-Swift: ee4b8f80a3db18dd7f32b266ddf273310609443c
+  Starscream: 19b5533ddb925208db698f0ac508a100b884a1b9
+  WebRTC-SDK: c3d69a87e7185fad3568f6f3cff7c9ac5890acf3
+
+PODFILE CHECKSUM: 8f12d7a26af6cb4341acc1d1310919e073c423da
+
+COCOAPODS: 1.15.2
