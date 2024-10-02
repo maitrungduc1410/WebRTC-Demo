@@ -11,6 +11,7 @@ import SocketIO
 import WebRTC
 import FlexLayout
 import PinLayout
+import ReplayKit
 
 let SERVER_URL = "http://192.168.1.79:4000"
 
@@ -34,6 +35,14 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
     private var isScreenSharing = false;
     private var remoteVideoSize: CGSize?
     private var isRemoteStreamAdded = false
+    
+    private var broadcastPicker: RPSystemBroadcastPickerView = {
+        let view = RPSystemBroadcastPickerView()
+        view.preferredExtension = "com.ducmai.example.WebRTCDemo.WebRTCDemoScreenBroadcast"  // Replace with your extension's bundle ID
+        view.showsMicrophoneButton = false // Hide microphone button if not needed
+        view.isHidden = true // Hide the picker UI
+        return view
+    }()
     
     
     override func viewDidLoad() {
@@ -181,6 +190,8 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
                 flex.addItem(button).size(48)
             }
         }
+        
+        view.addSubview(broadcastPicker)
     }
     
     // Create a button with an icon
@@ -294,6 +305,13 @@ class CallViewController: UIViewController, WebRTCClientDelegate, CameraSessionD
             // Handle share screen button tap
             
             // TODO: for now we can only share screen of the app only, when go back to homescreen it won't work
+            
+            // Programmatically trigger the RPSystemBroadcastPickerView's button tap
+            // for view in broadcastPicker.subviews {
+            //     if let button = view as? UIButton {
+            //         button.sendActions(for: .allTouchEvents) // Simulate button tap
+            //     }
+            // }
             
 //            if isScreenSharing {
 //                webRTCClient.stopCapture()

@@ -8,8 +8,8 @@ const server = http.createServer(app);
 
 const io = require("socket.io")(server, {
   cors: {
-    origin: "*"
-  }
+    origin: "*",
+  },
 });
 const ipAddress = ip.address();
 
@@ -38,28 +38,27 @@ io.on("connection", (socket) => {
     const roomId = data.roomId.toString();
     console.log("join room:", roomId);
     const index = rooms.findIndex((room) => room.id === roomId);
-    console.log(index)
+    console.log(index);
     if (index > -1) {
-      console.log(11111)
+      console.log(11111);
       if (rooms[index].participants.length <= 1) {
-        console.log(22222)
+        console.log(22222);
         if (rooms[index].participants[0] === socket.id) {
           socket.emit("message", { message: "User is already in this room" });
           return;
         }
 
-
-        console.log(21)
+        console.log(21);
         socket.join(roomId);
         rooms[index].participants.push(socket.id);
 
         socket.broadcast.to(roomId).emit("new user joined");
       } else {
-        console.log(44444)
+        console.log(44444);
         socket.emit("message", { message: "Room is full" });
       }
     } else {
-      console.log(33333)
+      console.log(33333);
       socket.join(roomId);
       rooms.push({
         id: roomId,
@@ -114,6 +113,31 @@ io.on("connection", (socket) => {
       removeUserFromRoom(socket.id);
     } else {
       socket.emit("message", { message: "Room not found" });
+    }
+  });
+
+  socket.on("send encryption key", (data) => {
+    data.roomId = data.roomId.toString();
+    const index = rooms.findIndex((room) => room.id === data.roomId);
+
+    if (index > -1) {
+      socket.broadcast
+        .to(data.roomId)
+        .emit("receive encryption key", { encryptionKey: data.encryptionKey });
+    } else {
+      console.log("Room not found");
+      // socket.emit("message", { message: "Room not found" });
+    }
+  });
+
+  socket.on("encryption key received", (data) => {
+    data.roomId = data.roomId.toString();
+    const index = rooms.findIndex((room) => room.id === data.roomId);
+
+    if (index > -1) {
+      socket.broadcast
+        .to(data.roomId)
+        .emit("remote peer received encryption key");
     }
   });
 

@@ -5,7 +5,6 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import java.security.SecureRandom;
-import org.webrtc.FrameCryptor;
 
 public class AESGCMUtil {
     private static final String AES = "AES";

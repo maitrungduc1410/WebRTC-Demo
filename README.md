@@ -15,8 +15,8 @@
 - ✅ Switch between microphone vs Speaker
 - ✅ Send message using data channel
 - ✅ Screen sharing. All except iOS
+- End to end encryption. Only Web is supported. Native is in progress...([see below](#end-to-end-encryption))
 - Stream video file. In progress...
-- End to end encryption. In progress...
 
 # Disclaimer
 This is intended to show common use cases of WebRTC cross platforms and to give you some ideas, it may have bugs, use with caution!
@@ -71,3 +71,14 @@ Change Minimum Deployments of the pod that has issue to latest
 Solution: Update your Xcode project build option ENABLE_USER_SCRIPT_SANDBOXING to 'No'.
 
 <img src="images/ios_issue_2_solution.png" width="300" />
+
+# End-to-end encryption
+
+> [!NOTE]  
+> Currently only supported for Web-Web communication
+
+Under `web/src/App.vue`, set `enableE2EE=true` to enable E2EE
+
+By default, E2EE use Web Worker for encrypt/decrypt, if you want to do that on Main thread then set `useEncryptionWorker=false`
+
+If you want to verify if E2EE is working, turn on `shouldSendEncryptionKey=true`, then the remote peer won't receive encryptionKey and it will show raw video which is encrypted and not visible
