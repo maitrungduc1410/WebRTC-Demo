@@ -151,6 +151,8 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
                 print(error)
                 return
             }
+            
+            print("succeed to set remote answer SDP")
         }
     }
     

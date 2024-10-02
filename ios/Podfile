@@ -13,3 +13,16 @@ target 'WebRTCDemo' do
   pod 'PinLayout'
 
 end
+
+
+target 'WebRTCDemoScreenBroadcast' do
+  # Comment the next line if you don't want to use dynamic frameworks
+  use_frameworks!
+
+  # Pods for WebRTCDemoScreenBroadcast
+ 
+  # the extension will simply reuse signaling info that the main app already did and save to userdefaults
+  
+  pod 'WebRTC-SDK', '=125.6422.04'
+
+end

@@ -1,6 +1,7 @@
 <script script setup lang="ts">
 import io, { Socket } from 'socket.io-client'
 import { onBeforeMount, ref } from 'vue';
+import { encryptStream, decryptStream } from "./e2ee";
 
 const BASE_URL = 'http://localhost:4000'
 const roomId = ref<number | undefined>(undefined)
@@ -17,32 +18,45 @@ let socket: Socket | null = null
 let dataChannel: RTCDataChannel | null = null
 let isScreenSharing = false;
 
+const enableE2EE = false;
+let encryptionKey: CryptoKey;
+// For debugging purpose: this shouldSendEncryptionKey flag is use to verify whether end2end encryption is working
+// if true -> send encryption key to remote peer, both peers will encrypt/decrypt the other peer's stream
+// if false -> streams from initiator (who joins room first) will be encrypted, remote peer doesn't have encryption key and hence can't see initiator's stream
+const shouldSendEncryptionKey = true;
+
+const useEncryptionWorker = true;
+let encryptionWorker: Worker | undefined = undefined
+if (enableE2EE && useEncryptionWorker) {
+  encryptionWorker = new Worker(new URL('./encryptionWorker.ts', import.meta.url), {
+    type: 'module'
+  });
+}
+
 onBeforeMount(() => {
   socket = io(BASE_URL)
-  socket!.on('connect', () => {
+  socket.on('connect', () => {
     console.log('Socket connected')
   })
 
   generateRandomId()
 
-  socket!.on('new user joined', async () => {
+  socket.on('new user joined', async () => {
     console.log(1111, 'new user joined')
-    peerConnection = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' },]
-    })
 
-    initPeerEvents()
-
-    const offer = await peerConnection!.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    })
-    await peerConnection!.setLocalDescription(offer)
-    console.log('new user joined', offer)
-    socket!.emit('offer', { offer, roomId: roomId.value })
+    if (enableE2EE) {
+      if (useEncryptionWorker) {
+        generateEncryptionKeyUsingWorker()
+      } else {
+        await generateEncryptionKey()
+        init()
+      }
+    } else {
+      init()
+    }
   })
 
-  socket!.on('offer', async data => {
+  socket.on('offer', async data => {
     console.log(2222, 'offer', data.offer)
 
     if (!peerConnection) {
@@ -62,29 +76,61 @@ onBeforeMount(() => {
     socket!.emit('answer', { answer, roomId: roomId.value })
   })
 
-  socket!.on('answer', async data => {
+  socket.on('answer', async data => {
     console.log(1111, data.answer)
     const remoteDesc = new RTCSessionDescription(data.answer)
     await peerConnection!.setRemoteDescription(remoteDesc)
   })
 
-  socket!.on('new ice candidate', async data => {
+  socket.on('new ice candidate', async data => {
     await peerConnection!.addIceCandidate(data.iceCandidate)
   })
+
+  if (enableE2EE) {
+    socket.on('receive encryption key', async (data: { encryptionKey: ArrayBuffer }) => {
+      console.log('Received encryption key:', data.encryptionKey);
+
+      if (useEncryptionWorker) {
+        encryptionWorker?.postMessage({
+          action: 'setKey',
+          key: data.encryptionKey
+        });
+      } else {
+        encryptionKey = await window.crypto.subtle.importKey(
+          "raw",
+          data.encryptionKey,
+          { name: "AES-GCM" },
+          true,
+          ["encrypt", "decrypt"]
+        );
+      }
+
+      socket!.emit('encryption key received', { roomId: roomId.value });
+    });
+
+    socket.on('remote peer received encryption key', () => {
+      console.log('Remote peer received encryption key');
+    });
+  }
 })
 
+async function init() {
+  peerConnection = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' },]
+  })
+
+  initPeerEvents()
+
+  const offer = await peerConnection!.createOffer({
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true
+  })
+  await peerConnection!.setLocalDescription(offer)
+  console.log('new user joined', offer)
+  socket!.emit('offer', { offer, roomId: roomId.value })
+}
+
 async function setVideoFromLocalCamera(useScreenShare = false) {
-  // try {
-  //   const constraints = { video: true, audio: true }
-  //   const stream = await navigator.mediaDevices.getUserMedia(constraints)
-  //   const videoElement = document.getElementById('local') as HTMLVideoElement
-  //   videoElement.srcObject = stream
-
-  //   localStream = stream
-  // } catch (error) {
-  //   console.error('Error opening video camera.', error)
-  // }
-
   try {
     let stream;
     if (useScreenShare) {
@@ -206,8 +252,6 @@ function initPeerEvents() {
     }
 
     remoteStream!.addTrack(event.track)
-
-
   }
 
   peerConnection!.ondatachannel = event => {
@@ -217,6 +261,57 @@ function initPeerEvents() {
 
     initDataChannelEvents()
   };
+
+  if (enableE2EE) {
+    peerConnection!.getSenders().forEach(async sender => {
+      console.log('sender: ', sender)
+      if (sender.track?.kind === 'video' || sender.track?.kind === 'audio') {
+        // @ts-ignore
+        const senderStreams = sender.createEncodedStreams();
+        console.log('senderStreams', senderStreams)
+        const readable = senderStreams.readable;
+        const writable = senderStreams.writable;
+
+        if (useEncryptionWorker) {
+          // E2EE using Worker thread
+          console.log('useEncryptionWorker', 1111)
+
+          encryptionWorker?.postMessage({
+            action: 'encrypt',
+            readable,
+            writable
+          }, [readable, writable]);
+        } else {
+          // E2EE using Main thread
+          await encryptStream(encryptionKey, readable, writable);
+        }
+      }
+    });
+
+    peerConnection!.getReceivers().forEach(async receiver => {
+      console.log('receiver: ', receiver)
+      if (receiver.track.kind === 'video' || receiver.track.kind === 'audio') {
+        // @ts-ignore
+        const receiverStreams = receiver.createEncodedStreams();
+        const readable = receiverStreams.readable;
+        const writable = receiverStreams.writable;
+
+        if (useEncryptionWorker) {
+          // E2EE using Worker thread
+          encryptionWorker?.postMessage({
+            action: 'decrypt',
+            readable,
+            writable,
+            shouldSendEncryptionKey
+          }, [readable, writable]);
+        } else {
+          // E2EE using Main thread
+          // no need to decrypt remote stream if shouldSendEncryptionKey = false, instead just directly display it
+          await decryptStream(shouldSendEncryptionKey ? encryptionKey : undefined, readable, writable);
+        }
+      }
+    });
+  }
 }
 async function openDataChannel() {
   dataChannel = peerConnection!.createDataChannel("MyApp Channel");
@@ -304,10 +399,55 @@ function muteRemote() {
   }
 }
 
-
 function toggleScreenShare() {
   isScreenSharing = !isScreenSharing;
   setVideoFromLocalCamera(isScreenSharing);
+}
+
+// E2EE in Main thread
+async function generateEncryptionKey() {
+  // Generate a key for encryption/decryption using AES-GCM
+  encryptionKey = await window.crypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+
+  if (shouldSendEncryptionKey) {
+    // Export the key to send over the signaling channel
+    const exportedKey = await window.crypto.subtle.exportKey("raw", encryptionKey);
+    socket!.emit('send encryption key', { roomId: roomId.value, encryptionKey: exportedKey });
+  }
+}
+
+// E2EE in Worker thread
+
+function generateEncryptionKeyUsingWorker() {
+  console.log('generateEncryptionKeyUsingWorker')
+  encryptionWorker?.postMessage({
+    action: 'generateKey',
+  });
+}
+
+if (encryptionWorker) {
+  encryptionWorker.onmessage = async (event) => {
+    const { action, key } = event.data;
+
+    switch (action) {
+      case "generatedKey":
+        encryptionKey = key;
+        if (shouldSendEncryptionKey) {
+          // Export the key to send over the signaling channel
+          const exportedKey = await window.crypto.subtle.exportKey("raw", encryptionKey);
+          socket!.emit('send encryption key', { roomId: roomId.value, encryptionKey: exportedKey });
+        }
+        init()
+        break;
+    }
+  };
 }
 </script>
 

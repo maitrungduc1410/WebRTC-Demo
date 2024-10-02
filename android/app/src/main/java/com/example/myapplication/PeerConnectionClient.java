@@ -25,6 +25,7 @@ import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
 import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
+import org.webrtc.RtpReceiver;
 import org.webrtc.RtpSender;
 import org.webrtc.SdpObserver;
 import org.webrtc.SessionDescription;
@@ -36,9 +37,14 @@ import org.webrtc.VideoEncoderFactory;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 import org.webrtc.ScreenCapturerAndroid;
+import org.webrtc.FrameCryptor;
+import org.webrtc.FrameCryptorAlgorithm;
+import org.webrtc.FrameCryptorFactory;
+import org.webrtc.FrameCryptorKeyProvider;
 
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -306,6 +312,49 @@ public class PeerConnectionClient {
             pc.addTrack(localMS.videoTracks.get(0), Collections.singletonList("ARDAMS"));
 
             mListener.onStatusChanged("CONNECTING");
+//
+//            Log.d(TAG, "111111: 11" + pc.getSenders().size());
+//            Log.d(TAG, "111111: 22" + pc.getReceivers().size());
+//
+//            // Create the FrameCryptorKeyProvider
+//            FrameCryptorKeyProvider keyProvider = FrameCryptorFactory.createFrameCryptorKeyProvider(
+//                    false,        // sharedKey: using a unique key per participant
+//                    new byte[]{0x00, 0x01}, // ratchetSalt: unique salt value
+//                    16,                     // ratchetWindowSize: the window size for key ratcheting
+//                    new byte[]{0x10},       // uncryptedMagicBytes: custom magic bytes to identify unencrypted frames
+//                    3,                      // failureTolerance: maximum failures before disabling the cryptor
+//                    5,                      // keyRingSize: number of keys in the key ring
+//                    true                    // discardFrameWhenCryptorNotReady: discard frames if the cryptor isn't ready
+//            );
+//
+//            // Set encryption key for the participant
+//            String participantId = "local";
+//            byte[] encryptionKey = new byte[32];  // Replace with secure key generation
+//            new SecureRandom().nextBytes(encryptionKey);
+//            keyProvider.setKey(participantId, 0, encryptionKey);
+//
+//            for (RtpSender rtpSender : pc.getSenders()) {
+//                FrameCryptor senderCryptor = FrameCryptorFactory.createFrameCryptorForRtpSender(
+//                        factory, rtpSender, participantId, FrameCryptorAlgorithm.AES_GCM, keyProvider);
+//                senderCryptor.setEnabled(true);
+//
+//                // Observe cryptor state
+//                senderCryptor.setObserver((participantId1, newState) -> {
+//                    Log.d("WebRTC", "111111 Encryption state: " + newState);
+//                    Log.d("WebRTC", "111111 Encryption participantId1: " + participantId1);
+//                });
+//            }
+//
+//
+//            for (RtpReceiver rtpReceiver : pc.getReceivers()) {
+//                FrameCryptor receiverCryptor = FrameCryptorFactory.createFrameCryptorForRtpReceiver(
+//                        factory, rtpReceiver, participantId, FrameCryptorAlgorithm.AES_GCM, keyProvider);
+//                receiverCryptor.setEnabled(true);
+//                receiverCryptor.setObserver((participantId1, newState) -> {
+//                    Log.d("WebRTC", "111111 Decryption state: " + newState);
+//                    Log.d("WebRTC", "111111 Decryption participantId1: " + participantId1);
+//                });
+//            }
         }
 
 
