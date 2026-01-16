@@ -9,6 +9,7 @@
 import Foundation
 import WebRTC
 import ReplayKit
+import AVFoundation
 
 protocol WebRTCClientDelegate {
     func didGenerateCandidate(iceCandidate: RTCIceCandidate)
@@ -37,6 +38,20 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     private var dataChannel: RTCDataChannel!
     private var useFrontCamera = true
     private var videoSource: RTCVideoSource?
+
+    private var isScreenSharing = false
+    
+    private var isSwitchingCamera = false
+    
+    // Video file sharing properties
+    private var fileVideoCapturer: RTCFileVideoCapturer?
+    private var isFileSharingActive = false
+    
+    // Screen sharing properties
+    private var screenCapturer: FlutterBroadcastScreenCapturer?
+    private var originalCapturer: RTCVideoCapturer?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var audioSession: AVAudioSession?
     
     var delegate: WebRTCClientDelegate?
     public private(set) var isConnected: Bool = false
@@ -69,13 +84,21 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
         
         let videoEncoderFactory = RTCDefaultVideoEncoderFactory()
         let videoDecoderFactory = RTCDefaultVideoDecoderFactory()
-        self.peerConnectionFactory = RTCPeerConnectionFactory(encoderFactory: videoEncoderFactory, decoderFactory: videoDecoderFactory)
+        self.peerConnectionFactory = RTCPeerConnectionFactory(
+            encoderFactory: videoEncoderFactory,
+            decoderFactory: videoDecoderFactory
+        )
         
         setupView()
         setupLocalTracks()
         
         if self.channels.video {
-            startCaptureLocalVideo(cameraPositon: .front, videoWidth: 640, videoHeight: 640*16/9, videoFps: 30)
+            startCaptureLocalVideo(
+                cameraPositon: .front,
+                videoWidth: 640,
+                videoHeight: 640*16/9,
+                videoFps: 30
+            )
             self.localVideoTrack?.add(self.localRenderView!)
         }
     }
@@ -117,16 +140,21 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     }
     
     // MARK: Signaling Event
-    func receiveOffer(offerSDP: RTCSessionDescription, onCreateAnswer: @escaping (RTCSessionDescription) -> Void){
+    func receiveOffer(
+        offerSDP: RTCSessionDescription,
+        onCreateAnswer: @escaping (RTCSessionDescription) -> Void
+    ){
         if(self.peerConnection == nil){
             print("offer received, create peerconnection")
             self.peerConnection = setupPeerConnection()
             self.peerConnection!.delegate = self
             if self.channels.video {
-                self.peerConnection!.add(localVideoTrack, streamIds: ["stream-0"])
+                self.peerConnection!
+                    .add(localVideoTrack, streamIds: ["stream-0"])
             }
             if self.channels.audio {
-                self.peerConnection!.add(localAudioTrack, streamIds: ["stream-0"])
+                self.peerConnection!
+                    .add(localAudioTrack, streamIds: ["stream-0"])
             }
             
         }
@@ -157,32 +185,33 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     }
     
     func receiveCandidate(candidate: RTCIceCandidate){
-        self.peerConnection?.add(candidate, completionHandler: { err in
-            if let error = err {
-                print("failed to set ice candidate: \(error.localizedDescription)")
-            }
-        })
-    }
-    
-    func captureCurrentFrame(sampleBuffer: CMSampleBuffer){
-        if let capturer = self.videoCapturer as? RTCCustomFrameCapturer {
-            capturer.capture(sampleBuffer)
-        }
-    }
-    
-    func captureCurrentFrame(sampleBuffer: CVPixelBuffer){
-        if let capturer = self.videoCapturer as? RTCCustomFrameCapturer {
-            capturer.capture(sampleBuffer)
-        }
+        self.peerConnection?.add(
+candidate,
+ completionHandler: { err in
+     if let error = err {
+         print(
+            "failed to set ice candidate: \(error.localizedDescription)"
+         )
+     }
+ })
     }
     
     // MARK: - Private functions
     // MARK: - Setup
     private func setupPeerConnection() -> RTCPeerConnection{
         let rtcConf = RTCConfiguration()
-        rtcConf.iceServers = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"])]
-        let mediaConstraints = RTCMediaConstraints.init(mandatoryConstraints: nil, optionalConstraints: nil)
-        let pc = self.peerConnectionFactory.peerConnection(with: rtcConf, constraints: mediaConstraints, delegate: nil)
+        rtcConf.iceServers = [RTCIceServer(
+            urlStrings: ["stun:stun.l.google.com:19302"]
+        )]
+        let mediaConstraints = RTCMediaConstraints.init(
+            mandatoryConstraints: nil,
+            optionalConstraints: nil
+        )
+        let pc = self.peerConnectionFactory.peerConnection(
+            with: rtcConf,
+            constraints: mediaConstraints,
+            delegate: nil
+        )
         return pc!
     }
     
@@ -210,9 +239,17 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     }
     
     private func createAudioTrack() -> RTCAudioTrack {
-        let audioConstrains = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
-        let audioSource = self.peerConnectionFactory.audioSource(with: audioConstrains)
-        let audioTrack = self.peerConnectionFactory.audioTrack(with: audioSource, trackId: "audio0")
+        let audioConstrains = RTCMediaConstraints(
+            mandatoryConstraints: nil,
+            optionalConstraints: nil
+        )
+        let audioSource = self.peerConnectionFactory.audioSource(
+            with: audioConstrains
+        )
+        let audioTrack = self.peerConnectionFactory.audioTrack(
+            with: audioSource,
+            trackId: "audio0"
+        )
         
         // audioTrack.source.volume = 10
         return audioTrack
@@ -230,30 +267,42 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
         else {
             self.videoCapturer = RTCCameraVideoCapturer(delegate: videoSource!)
         }
-        let videoTrack = self.peerConnectionFactory.videoTrack(with: videoSource!, trackId: "video0")
+        let videoTrack = self.peerConnectionFactory.videoTrack(
+            with: videoSource!,
+            trackId: "video0"
+        )
         return videoTrack
     }
     
-    private func startCaptureLocalVideo(cameraPositon: AVCaptureDevice.Position, videoWidth: Int, videoHeight: Int?, videoFps: Int) {
+    private func startCaptureLocalVideo(
+        cameraPositon: AVCaptureDevice.Position,
+        videoWidth: Int,
+        videoHeight: Int?,
+        videoFps: Int
+    ) {
         if let capturer = self.videoCapturer as? RTCCameraVideoCapturer {
             var targetDevice: AVCaptureDevice?
             var targetFormat: AVCaptureDevice.Format?
             
             // find target device
-            let devicies = RTCCameraVideoCapturer.captureDevices()
-            devicies.forEach { (device) in
+            let devices = RTCCameraVideoCapturer.captureDevices()
+            devices.forEach { (device) in
                 if device.position ==  cameraPositon{
                     targetDevice = device
                 }
             }
             
             // find target format
-            let formats = RTCCameraVideoCapturer.supportedFormats(for: targetDevice!)
+            let formats = RTCCameraVideoCapturer.supportedFormats(
+                for: targetDevice!
+            )
             formats.forEach { (format) in
                 for _ in format.videoSupportedFrameRateRanges {
                     let description = format.formatDescription as CMFormatDescription
-                    let dimensions = CMVideoFormatDescriptionGetDimensions(description)
-                    
+                    let dimensions = CMVideoFormatDescriptionGetDimensions(
+                        description
+                    )
+                    print("found format: ", dimensions.width, dimensions.height)
                     if dimensions.width == videoWidth && dimensions.height == videoHeight ?? 0{
                         targetFormat = format
                     } else if dimensions.width == videoWidth {
@@ -267,8 +316,11 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
                                   fps: videoFps)
         } else if let capturer = self.videoCapturer as? RTCFileVideoCapturer{
             print("setup file video capturer")
-            if let _ = Bundle.main.path( forResource: "sample.mp4", ofType: nil ) {
-                capturer.startCapturing(fromFileNamed: "sample.mp4") { (err) in
+            if let _ = Bundle.main.path(
+                forResource: "video.mp4",
+                ofType: nil
+            ) {
+                capturer.startCapturing(fromFileNamed: "video.mp4") { (err) in
                     print(err)
                 }
             }else{
@@ -278,52 +330,79 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     }
     
     // MARK: - Signaling Offer/Answer
-    private func makeOffer(onSuccess: @escaping (RTCSessionDescription) -> Void) {
-        self.peerConnection?.offer(for: RTCMediaConstraints.init(mandatoryConstraints: nil, optionalConstraints: nil)) { (sdp, err) in
-            if let error = err {
-                print("error with make offer")
-                print(error)
-                return
-            }
+    private func makeOffer(
+        onSuccess: @escaping (RTCSessionDescription) -> Void
+    ) {
+        self.peerConnection?
+            .offer(for: RTCMediaConstraints.init(mandatoryConstraints: nil, optionalConstraints: nil)) { (
+                sdp,
+                err
+            ) in
+                if let error = err {
+                    print("error with make offer")
+                    print(error)
+                    return
+                }
             
-            if let offerSDP = sdp {
-                print("make offer, created local sdp")
-                self.peerConnection!.setLocalDescription(offerSDP, completionHandler: { (err) in
-                    if let error = err {
-                        print("error with set local offer sdp")
-                        print(error)
-                        return
-                    }
-                    print("succeed to set local offer SDP")
-                    onSuccess(offerSDP)
-                })
-            }
+                if let offerSDP = sdp {
+                    print("make offer, created local sdp")
+                    self.peerConnection!
+                        .setLocalDescription(
+                            offerSDP,
+                            completionHandler: { (
+                                err
+                            ) in
+                                if let error = err {
+                                    print("error with set local offer sdp")
+                                    print(error)
+                                    return
+                                }
+                                print("succeed to set local offer SDP")
+                                onSuccess(offerSDP)
+                            })
+                }
             
-        }
+            }
     }
     
-    private func makeAnswer(onCreateAnswer: @escaping (RTCSessionDescription) -> Void){
-        self.peerConnection!.answer(for: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil), completionHandler: { (answerSessionDescription, err) in
-            if let error = err {
-                print("failed to create local answer SDP")
-                print(error)
-                return
-            }
-            
-            print("succeed to create local answer SDP")
-            if let answerSDP = answerSessionDescription{
-                self.peerConnection!.setLocalDescription( answerSDP, completionHandler: { (err) in
+    private func makeAnswer(
+        onCreateAnswer: @escaping (RTCSessionDescription) -> Void
+    ){
+        self.peerConnection!
+            .answer(
+                for: RTCMediaConstraints(
+                    mandatoryConstraints: nil,
+                    optionalConstraints: nil
+                ),
+                completionHandler: { (
+                    answerSessionDescription,
+                    err
+                ) in
                     if let error = err {
-                        print("failed to set local ansewr SDP")
+                        print("failed to create local answer SDP")
                         print(error)
                         return
                     }
+            
+                    print("succeed to create local answer SDP")
+                    if let answerSDP = answerSessionDescription{
+                        self.peerConnection!
+                            .setLocalDescription(
+                                answerSDP,
+                                completionHandler: { (
+                                    err
+                                ) in
+                                    if let error = err {
+                                        print("failed to set local ansewr SDP")
+                                        print(error)
+                                        return
+                                    }
                     
-                    print("succeed to set local answer SDP")
-                    onCreateAnswer(answerSDP)
+                                    print("succeed to set local answer SDP")
+                                    onCreateAnswer(answerSDP)
+                                })
+                    }
                 })
-            }
-        })
     }
     
     // MARK: - Connection Events
@@ -360,18 +439,27 @@ extension WebRTCClient {
         
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didOpen dataChannel: RTCDataChannel
+    ) {
         print("did open data channel: ", dataChannel.readyState.rawValue)
-                
+        
         self.dataChannel = dataChannel
         self.dataChannel.delegate = self
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didChange stateChanged: RTCSignalingState
+    ) {
         print("signaling state changed: ", stateChanged)
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didAdd stream: RTCMediaStream
+    ) {
         print("did add stream")
         self.remoteStream = stream
         
@@ -386,13 +474,19 @@ extension WebRTCClient {
         }
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didRemove stream: RTCMediaStream
+    ) {
         print("--- did remove stream ---")
         
         
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didChange newState: RTCIceConnectionState
+    ) {
         switch newState {
             
         case .connected, .completed:
@@ -408,37 +502,62 @@ extension WebRTCClient {
         }
         
         DispatchQueue.main.async {
-            self.delegate?.didIceConnectionStateChanged(iceConnectionState: newState)
+            self.delegate?
+                .didIceConnectionStateChanged(iceConnectionState: newState)
         }
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didChange newState: RTCIceGatheringState
+    ) {
         
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didGenerate candidate: RTCIceCandidate
+    ) {
         self.delegate?.didGenerateCandidate(iceCandidate: candidate)
     }
     
-    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didRemove candidates: [RTCIceCandidate]
+    ) {
         
     }
 }
 
 // MARK: - RTCVideoView Delegate
 extension WebRTCClient {
-    func videoView(_ videoView: RTCVideoRenderer, didChangeVideoSize size: CGSize) {
-        let isLandScape = size.width < size.height
+    func videoView(
+        _ videoView: RTCVideoRenderer,
+        didChangeVideoSize size: CGSize
+    ) {
+        let isLandScape = size.width > size.height
+        
+        print("videoView did change video size, isLandScape \(isLandScape)")
+        
         var renderView: RTCMTLVideoView?
         var parentView: UIView?
-        if videoView.isEqual(localRenderView){
-            print("local video size changed")
+        
+        if videoView.isEqual(localRenderView) {
+            print(
+                "local video size changed, width: ",
+                size.width,
+                " height: ",
+                size.height
+            )
             renderView = localRenderView
             parentView = localView
-        }
-        
-        if videoView.isEqual(remoteRenderView!){
-            print("remote video size changed to: ", size)
+        } else if videoView.isEqual(remoteRenderView!) {
+            print(
+                "remote video size changed to: ",
+                size.width,
+                " height: ",
+                size.height
+            )
             renderView = remoteRenderView
             parentView = remoteView
         }
@@ -447,14 +566,24 @@ extension WebRTCClient {
             return
         }
         
-        if(isLandScape){
-            let ratio = size.width / size.height
-            _renderView.frame = CGRect(x: 0, y: 0, width: _parentView.frame.height * ratio, height: _parentView.frame.height)
-            _renderView.center.x = _parentView.frame.width/2
-        }else{
+        if isLandScape {
             let ratio = size.height / size.width
-            _renderView.frame = CGRect(x: 0, y: 0, width: _parentView.frame.width, height: _parentView.frame.width * ratio)
-            _renderView.center.y = _parentView.frame.height/2
+            _renderView.frame = CGRect(
+                x: 0,
+                y: 0,
+                width: _parentView.frame.width,
+                height: _parentView.frame.width * ratio
+            )
+            _renderView.center.y = _parentView.frame.height / 2
+        } else {
+            let ratio = size.width / size.height
+            _renderView.frame = CGRect(
+                x: 0,
+                y: 0,
+                width: _parentView.frame.height * ratio,
+                height: _parentView.frame.height
+            )
+            _renderView.center.x = _parentView.frame.width / 2
         }
     }
 }
@@ -466,11 +595,17 @@ extension WebRTCClient: RTCDataChannelDelegate {
         self.delegate?.onDataChannelStateChange(state: dataChannel.readyState)
     }
     
-    func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+    func dataChannel(
+        _ dataChannel: RTCDataChannel,
+        didReceiveMessageWith buffer: RTCDataBuffer
+    ) {
         if buffer.isBinary {
             print("Binary message")
         } else {
-            if let receivedMessage = String(data: buffer.data, encoding: .utf8) {
+            if let receivedMessage = String(
+                data: buffer.data,
+                encoding: .utf8
+            ) {
                 print("Message received: \(receivedMessage)")
                 self.delegate?.onDataChannelMessage(message: receivedMessage)
             } else {
@@ -491,16 +626,283 @@ extension WebRTCClient {
     }
     
     func switchCamera() {
-        useFrontCamera.toggle()
+        print("switch camera")
         
-        startCaptureLocalVideo(cameraPositon: useFrontCamera ? .front : .back, videoWidth: 640, videoHeight: 640*16/9, videoFps: 30)
+        // Prevent multiple simultaneous switches
+        guard !isSwitchingCamera else {
+            print("Camera switch already in progress")
+            return
+        }
+        
+        guard let capturer = self.videoCapturer as? RTCCameraVideoCapturer else {
+            print("Camera capturer not available")
+            return
+        }
+        
+        // Don't switch if screen sharing is active
+        guard !isScreenSharing else {
+            print("Cannot switch camera while screen sharing")
+            return
+        }
+        
+        isSwitchingCamera = true
+        
+        
+        // Stop current capture and start new one
+        capturer.stopCapture { [weak self] in
+            guard let self = self else { return }
+            useFrontCamera.toggle()
+            let newPosition: AVCaptureDevice.Position = useFrontCamera ? .front : .back
+            
+            startCaptureLocalVideo(
+                cameraPositon: newPosition,
+                videoWidth: 640,
+                videoHeight: 640*16/9,
+                videoFps: 30
+            )
+            
+            self.isSwitchingCamera = false
+            print(
+                "Camera switched successfully to \(newPosition == .front ? "front" : "back")"
+            )
+        }
     }
     
-    func createDataChannel(dataChannelName: String, onSuccess: @escaping (RTCSessionDescription) -> Void) {
+    // MARK: - Screen Sharing
+    func startScreenCapture() {
+        print("startScreenCapture")
+        
+        guard !isScreenSharing else {
+            print("Screen sharing already active")
+            return
+        }
+        
+        // Stop camera capture first
+        if let cameraCapturer = self.videoCapturer as? RTCCameraVideoCapturer {
+            cameraCapturer.stopCapture()
+        }
+        
+        // Save the original capturer
+        originalCapturer = videoCapturer
+        
+        // Reuse the SAME video source (just like file sharing)
+        guard let videoSource = videoSource else {
+            print("Video source not available")
+            return
+        }
+        
+        // Create the broadcast screen capturer with existing video source
+        screenCapturer = FlutterBroadcastScreenCapturer(delegate: videoSource)
+        
+        // Start the broadcast capturer (this sets up the socket server)
+        screenCapturer?.startCapture()
+        
+        // Show the broadcast picker to let user start broadcasting
+        showBroadcastPicker()
+        
+        // Listen for broadcast started notification, this is sent from broadcast extension
+        DarwinNotificationCenter.shared.addObserver(
+            self,
+            for: .broadcastStarted
+        ) { [weak self] in
+            DispatchQueue.main.async {
+                self?.onBroadcastStarted()
+            }
+        }
+        
+        // Listen for broadcast stopped notification, this is sent from broadcast extension
+        DarwinNotificationCenter.shared.addObserver(
+            self,
+            for: .broadcastStopped
+        ) { [weak self] in
+            DispatchQueue.main.async {
+                self?.onBroadcastStopped()
+            }
+        }
+        // Start background task to keep socket server alive when app backgrounds
+        startBackgroundTask()
+        setupAudioSessionForBackground()
+        
+        isScreenSharing = true
+        print("Screen sharing setup complete, waiting for broadcast to start...")
+    }
+    
+    private func onBroadcastStarted() {
+        print("Broadcast started - screen capture is now active")
+        isScreenSharing = true
+        // No need to replace tracks! The localVideoTrack already uses videoSource,
+        // and screen frames are now feeding into that same source
+    }
+    
+    private func onBroadcastStopped() {
+        print("Broadcast stopped - stopping screen capture")
+        stopScreenCapture()
+    }
+    
+    func stopScreenCapture() {
+        print("stopScreenCapture")
+        
+        guard isScreenSharing else {
+            print("Screen sharing not active")
+            return
+        }
+        
+        // Stop the screen capturer
+        screenCapturer?.stopCapture()
+        screenCapturer = nil
+        
+        // Remove observers
+        DarwinNotificationCenter.shared.removeObserver(self, for: .broadcastStarted)
+        DarwinNotificationCenter.shared.removeObserver(self, for: .broadcastStopped)
+        
+        // End background task
+        endBackgroundTask()
+        
+        do {
+            try audioSession?.setActive(false, options: .notifyOthersOnDeactivation)
+            print("Audio session deactivated successfully.")
+            
+        } catch {
+            print("Failed to deactivate audio session: \(error.localizedDescription)")
+            // Common errors include attempting to deactivate while I/O is still running
+        }
+        
+        // Restart camera capture (same as file sharing)
+        if originalCapturer is RTCCameraVideoCapturer {
+            let cameraPosition: AVCaptureDevice.Position = useFrontCamera ? .front : .back
+            startCaptureLocalVideo(
+                cameraPositon: cameraPosition,
+                videoWidth: 640,
+                videoHeight: 640*16/9,
+                videoFps: 30
+            )
+        }
+        
+        isScreenSharing = false
+        print("Switched back to camera")
+    }
+    
+    // MARK: - Background Task Management
+    private func startBackgroundTask() {
+        endBackgroundTask() // End any existing task first
+        
+        backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+            print("Background task expiring, ending task")
+            self?.endBackgroundTask()
+        }
+        
+        print("Background task started: \(backgroundTask.rawValue)")
+    }
+    
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        
+        print("Ending background task: \(backgroundTask.rawValue)")
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+        isScreenSharing = false
+        print("Switched back to camera")
+    }
+    
+    func showBroadcastPicker() {
+        // Show the system broadcast picker
+        let picker = RPSystemBroadcastPickerView(
+            frame: CGRect(x: 0, y: 0, width: 50, height: 50)
+        )
+        picker.preferredExtension = "com.ducmai.WebRTCDemo.WebRTCDemoScreenBroadcast"
+        picker.showsMicrophoneButton = false
+        
+        // Find the button and trigger it
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            for subview in picker.subviews {
+                if let button = subview as? UIButton {
+                    button.sendActions(for: .touchUpInside)
+                    break
+                }
+            }
+        }
+    }
+    
+    // MARK: - Video File Sharing
+    func shareVideoFile(fileURL: URL) {
+        print("shareVideoFile is called")
+        
+        guard !isFileSharingActive else {
+            print("Already sharing a file")
+            return
+        }
+        
+        // Stop camera capture first
+        if let cameraCapturer = self.videoCapturer as? RTCCameraVideoCapturer {
+            cameraCapturer.stopCapture()
+        }
+        
+        // Reuse the SAME video source (don't create a new one)
+        guard let videoSource = videoSource else {
+            print("Video source not available")
+            return
+        }
+        
+        // Create RTCFileVideoCapturer with the existing video source
+        let fileVideoCapturer = RTCFileVideoCapturer(delegate: videoSource)
+        self.fileVideoCapturer = fileVideoCapturer
+        
+        // Use the original bundle-based method with video.mp4
+        //        if let _ = Bundle.main.path(forResource: "video.mp4", ofType: nil) {
+        //            fileVideoCapturer.startCapturing(fromFileNamed: "video.mp4") { error in
+        //                print("Error starting file video capture: \(error)")
+        //            }
+        //            print("Started capturing from bundled video.mp4")
+        //        } else {
+        //            print("video.mp4 not found in bundle")
+        //        }
+        
+        // NOTE: file capturing may take few seconds after startCapturing is called
+        fileVideoCapturer.startCapturing(fromFileURL: fileURL) { error in
+            print("Error starting file video capture: \(error)")
+        }
+        
+        print("Using existing video source for file sharing")
+        
+        // The localVideoTrack already uses this videoSource, so frames will flow automatically
+        // No need to create a new track or replace anything
+        
+        isFileSharingActive = true
+    }
+    
+    func stopVideoFileSharing() {
+        print("stopVideoFileSharing")
+        
+        guard isFileSharingActive else {
+            print("Not sharing a file")
+            return
+        }
+        
+        // Stop file capturer
+        fileVideoCapturer?.stopCapture()
+        fileVideoCapturer = nil
+        
+        // Restart camera capture
+        let cameraPosition: AVCaptureDevice.Position = useFrontCamera ? .front : .back
+        startCaptureLocalVideo(
+            cameraPositon: cameraPosition,
+            videoWidth: 640,
+            videoHeight: 640*16/9,
+            videoFps: 30
+        )
+        
+        isFileSharingActive = false
+    }
+    
+    func createDataChannel(
+        dataChannelName: String,
+        onSuccess: @escaping (RTCSessionDescription) -> Void
+    ) {
         print("createDataChannel:", dataChannelName)
         
         let config = RTCDataChannelConfiguration()
-        dataChannel = peerConnection?.dataChannel(forLabel: dataChannelName, configuration: config)
+        dataChannel = peerConnection?
+            .dataChannel(forLabel: dataChannelName, configuration: config)
         dataChannel.delegate = self
         makeOffer(onSuccess: onSuccess)
     }
@@ -526,61 +928,76 @@ extension WebRTCClient {
         }
     }
     
-//    func startCapture(onSuccess: @escaping (RTCSessionDescription) -> Void) {
-//        // Start screen recording using ReplayKit
-//        RPScreenRecorder.shared().startCapture { (sampleBuffer, bufferType, error) in
-//            if error != nil {
-//                print("Error capturing screen: \(error?.localizedDescription ?? "")")
-//                return
-//            }
-//            
-//            if bufferType == .video {
-//                // Process the sampleBuffer and send it to WebRTC
-//                self.processFrame(sampleBuffer: sampleBuffer)
-//            }
-//        } completionHandler: { error in
-//            if let error = error {
-//                print("Error starting capture: \(error.localizedDescription)")
-//                
-//                return
-//            }
-//            print("screen sharing started")
-//            
-//            if let capturer = self.videoCapturer as? RTCCameraVideoCapturer {
-//                capturer.stopCapture()
-//            }
-//            
-//            self.updateVideoTrack(trackId: "screenTrack")
-//            self.makeOffer(onSuccess: onSuccess)
-//        }
-//    }
-//    
-//    func stopCapture() {
-//        RPScreenRecorder.shared().stopCapture { error in
-//            if let error = error {
-//                print("Error stopping capture: \(error.localizedDescription)")
-//            }
-//        }
-//    }
-//    
-//    private func processFrame(sampleBuffer: CMSampleBuffer) {
-//        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-//        let videoFrame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: Int64(CACurrentMediaTime() * 1000000000))
-//        
-//        print("processFrame")
-//        videoSource?.capturer(videoCapturer, didCapture: videoFrame)
-//    }
-//    
-//    private func updateVideoTrack(trackId: String) {
-//        // Remove the previous video track
-//        if let stream = peerConnection?.localStreams.first, let videoTrack = stream.videoTracks.first {
-//            stream.removeVideoTrack(videoTrack)
-//        }
-//
-//        // Add the new video track
-//        localVideoTrack = peerConnectionFactory.videoTrack(with: self.videoSource!, trackId: trackId)
-//        
-//        peerConnection?.localStreams.first?.addVideoTrack(localVideoTrack)
-//    }
-}
+    // this is to record only my app only, can't record full screen
+    //    func startCapture(onSuccess: @escaping (RTCSessionDescription) -> Void) {
+    //        // Start screen recording using ReplayKit
+    //        RPScreenRecorder.shared().startCapture { (sampleBuffer, bufferType, error) in
+    //            if error != nil {
+    //                print("Error capturing screen: \(error?.localizedDescription ?? "")")
+    //                return
+    //            }
+    //
+    //            if bufferType == .video {
+    //                // Process the sampleBuffer and send it to WebRTC
+    //                self.processFrame(sampleBuffer: sampleBuffer)
+    //            }
+    //        } completionHandler: { error in
+    //            if let error = error {
+    //                print("Error starting capture: \(error.localizedDescription)")
+    //
+    //                return
+    //            }
+    //            print("screen sharing started")
+    //
+    //            if let capturer = self.videoCapturer as? RTCCameraVideoCapturer {
+    //                capturer.stopCapture()
+    //            }
+    //
+    //            self.updateVideoTrack(trackId: "screenTrack")
+    //            self.makeOffer(onSuccess: onSuccess)
+    //        }
+    //    }
+    //
+    //    func stopCapture() {
+    //        RPScreenRecorder.shared().stopCapture { error in
+    //            if let error = error {
+    //                print("Error stopping capture: \(error.localizedDescription)")
+    //            }
+    //        }
+    //    }
+    //
+    //    private func processFrame(sampleBuffer: CMSampleBuffer) {
+    //        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+    //        let videoFrame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: Int64(CACurrentMediaTime() * 1000000000))
+    //
+    //        print("processFrame")
+    //        videoSource?.capturer(videoCapturer, didCapture: videoFrame)
+    //    }
+    //
+    //    private func updateVideoTrack(trackId: String) {
+    //        // Remove the previous video track
+    //        if let stream = peerConnection?.localStreams.first, let videoTrack = stream.videoTracks.first {
+    //            stream.removeVideoTrack(videoTrack)
+    //        }
+    //
+    //        // Add the new video track
+    //        localVideoTrack = peerConnectionFactory.videoTrack(with: self.videoSource!, trackId: trackId)
+    //
+    //        peerConnection?.localStreams.first?.addVideoTrack(localVideoTrack)
+    //    }
+    
+    // have an audio session in background to keep app alive
+    func setupAudioSessionForBackground() {
+        audioSession = AVAudioSession.sharedInstance()
+        do {
+            // Ensure audio session is active - this keeps app alive in background
+            try audioSession!.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker, .mixWithOthers])
+            try audioSession!.setActive(true, options: [])
+            
+            print("✅ Audio session activated for background screen sharing")
+        } catch {
+            print("❌ Failed to setup audio session for background: \(error)")
+        }
+    }
 
+}

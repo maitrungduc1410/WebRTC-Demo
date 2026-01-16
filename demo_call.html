@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Video Call Screen</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#137fec",
+              "background-light": "#f6f7f8",
+              "background-dark": "#101922",
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .glass-panel {
+        background: rgba(16, 25, 34, 0.75);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+    </style>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-background-light dark:bg-background-dark font-display overflow-hidden h-screen w-full relative"
+  >
+    <div
+      class="absolute inset-0 z-0 w-full h-full bg-cover bg-center bg-no-repeat bg-[#2c3b4a]"
+      data-alt="Remote participant professional woman smiling during video call"
+      style="
+        background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuACbKOHFnxGXUdcG8ZdcBG32bLZ0v-Ide2viMKwP_8dEzLJku5cAmrfuS7rfHWtKd6e0_IE9HsCsXO-AdJyUe7diSz-jl_oYSu6vrIRBeilSpgRRu0GrtAwHlq9jNIrn5mx9j_90AZuikAk48TtMdkqvqZ-9zF2gPo1Ze3Ua21qQ9uNq7HFdcxzFNFCOzQivWXesk5c52C17kscG_0v0TgPNTnKtAD1W4b9rsTOKuxeiLg3zQ3yC6gKTkM0aautSNQygasTRrQ6TQ');
+      "
+    >
+      <div
+        class="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none"
+      ></div>
+    </div>
+    <div class="relative z-20 pt-12 px-4 pb-4 flex items-start justify-between">
+      <button
+        class="flex items-center justify-center w-10 h-10 rounded-full bg-black/20 text-white backdrop-blur-sm hover:bg-black/40 transition-colors"
+      >
+        <span class="material-symbols-outlined" style="font-size: 24px"
+          >keyboard_arrow_down</span
+        >
+      </button>
+      <div class="flex flex-col items-center flex-1">
+        <h2
+          class="text-white text-lg font-bold leading-tight tracking-tight drop-shadow-md"
+        >
+          Sarah Jenkins
+        </h2>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <p
+            class="text-white/80 text-xs font-medium tracking-wide drop-shadow-sm"
+          >
+            04:23
+          </p>
+        </div>
+      </div>
+      <button
+        class="flex items-center justify-center w-10 h-10 rounded-full bg-black/20 text-white backdrop-blur-sm hover:bg-black/40 transition-colors"
+      >
+        <span class="material-symbols-outlined" style="font-size: 24px"
+          >cameraswitch</span
+        >
+      </button>
+    </div>
+    <div class="relative z-10 flex-1 h-full w-full pointer-events-none">
+      <div
+        class="absolute right-4 bottom-72 w-28 h-40 sm:w-32 sm:h-48 rounded-xl overflow-hidden border-2 border-white/20 shadow-2xl pointer-events-auto bg-[#3e4c59]"
+      >
+        <div
+          class="w-full h-full bg-cover bg-center"
+          data-alt="Local user selfie view of young man in office"
+          style="
+            background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCrWIdoDeCpcdgvPEJ9qXuwSNqmjkmyykrtYWySnUIV0piYBbcW7609HiJHVtIQRcwYwCX4cPFptRZT8OmJ_lAEwOqebzgwFGK3VCro8kWfMh5yBa6qfC-oPAgRweb4rYE-3TAkBD3bUr-ZdTdy10QeRuK5QRpiBKEtmmBiWagJOyR2vloeOCYTDFI0lIAqCt49GyIgR-aiIEqC-HdJkihuuVJHtcaWSFrCbPfpbahJ8NI1b_I7PhZZ4k4sFX-XCNpVDjkhnQbLCQ');
+          "
+        ></div>
+        <div
+          class="absolute bottom-2 right-2 bg-red-500/90 p-1 rounded-full flex items-center justify-center shadow-sm"
+        >
+          <span
+            class="material-symbols-outlined text-white"
+            style="font-size: 12px"
+            >mic_off</span
+          >
+        </div>
+      </div>
+    </div>
+    <div
+      class="absolute bottom-0 left-0 right-0 z-30 flex flex-col items-center pb-8 px-4 w-full"
+    >
+      <div
+        class="flex items-center justify-center gap-8 w-full max-w-sm px-4 mb-6"
+      >
+        <button class="flex flex-col items-center gap-2 group">
+          <div
+            class="flex items-center justify-center w-12 h-12 rounded-full glass-panel hover:bg-white/10 transition-colors text-white border border-white/5 shadow-sm"
+          >
+            <span class="material-symbols-outlined" style="font-size: 20px"
+              >chat</span
+            >
+          </div>
+          <span class="text-[10px] font-medium text-white/80">Chat</span>
+        </button>
+        <button class="flex flex-col items-center gap-2 group">
+          <div
+            class="flex items-center justify-center w-12 h-12 rounded-full glass-panel hover:bg-white/10 transition-colors text-white border border-white/5 shadow-sm"
+          >
+            <span class="material-symbols-outlined" style="font-size: 20px"
+              >present_to_all</span
+            >
+          </div>
+          <span class="text-[10px] font-medium text-white/80">Share</span>
+        </button>
+        <button class="flex flex-col items-center gap-2 group">
+          <div
+            class="flex items-center justify-center w-12 h-12 rounded-full glass-panel hover:bg-white/10 transition-colors text-white border border-white/5 shadow-sm"
+          >
+            <span class="material-symbols-outlined" style="font-size: 20px"
+              >volume_up</span
+            >
+          </div>
+          <span class="text-[10px] font-medium text-white/80">Speaker</span>
+        </button>
+      </div>
+      <div
+        class="flex items-center justify-around w-full max-w-xs px-2 py-4 rounded-3xl glass-panel shadow-lg border border-white/5"
+      >
+        <button
+          class="flex flex-col items-center justify-center gap-1 group w-20"
+        >
+          <div
+            class="flex items-center justify-center w-14 h-14 rounded-full bg-white/10 group-hover:bg-white/20 transition-all text-white relative"
+          >
+            <span class="material-symbols-outlined" style="font-size: 28px"
+              >mic</span
+            >
+          </div>
+          <span class="text-[10px] font-medium text-white/70">Mute</span>
+        </button>
+        <button
+          class="flex flex-col items-center justify-center gap-1 group w-20 -mt-2"
+        >
+          <div
+            class="flex items-center justify-center w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 shadow-red-500/30 shadow-lg transition-all text-white transform hover:scale-105 active:scale-95"
+          >
+            <span
+              class="material-symbols-outlined"
+              style="font-size: 32px; font-variation-settings: 'FILL' 1"
+              >call_end</span
+            >
+          </div>
+          <span class="text-[10px] font-bold text-white mt-1">End</span>
+        </button>
+        <button
+          class="flex flex-col items-center justify-center gap-1 group w-20"
+        >
+          <div
+            class="flex items-center justify-center w-14 h-14 rounded-full bg-white/10 group-hover:bg-white/20 transition-all text-white"
+          >
+            <span class="material-symbols-outlined" style="font-size: 28px"
+              >videocam</span
+            >
+          </div>
+          <span class="text-[10px] font-medium text-white/70">Video</span>
+        </button>
+      </div>
+      <div class="h-4 w-full"></div>
+    </div>
+  </body>
+</html>

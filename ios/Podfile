@@ -7,10 +7,8 @@ target 'WebRTCDemo' do
 
   # Pods for WebRTCDemo
 
-  pod 'WebRTC-SDK', '=125.6422.04'
+  pod 'WebRTC-SDK', '=137.7151.11'
   pod 'Socket.IO-Client-Swift', '16.1.0'
-  pod 'FlexLayout'
-  pod 'PinLayout'
 
 end
 
@@ -22,7 +20,5 @@ target 'WebRTCDemoScreenBroadcast' do
   # Pods for WebRTCDemoScreenBroadcast
  
   # the extension will simply reuse signaling info that the main app already did and save to userdefaults
-  
-  pod 'WebRTC-SDK', '=125.6422.04'
 
 end

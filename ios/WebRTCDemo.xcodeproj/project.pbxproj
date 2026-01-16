@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		2B0F7E202C9B1FF200EC81C9 /* PeerConnectionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */; };
+		2B6336382F13A74B00CB3CEB /* SocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6336372F13A74B00CB3CEB /* SocketConnection.swift */; };
+		2B6336392F13A74B00CB3CEB /* SampleUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6336362F13A74B00CB3CEB /* SampleUploader.swift */; };
+		2B6336412F13AE3600CB3CEB /* Atomic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6336402F13AE3600CB3CEB /* Atomic.swift */; };
 		2B7458052C98569C003184F2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B7458042C98569C003184F2 /* AppDelegate.swift */; };
 		2B7458072C98569C003184F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B7458062C98569C003184F2 /* SceneDelegate.swift */; };
 		2B7458092C98569C003184F2 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B7458082C98569C003184F2 /* ViewController.swift */; };
@@ -15,9 +18,16 @@
 		2B74580E2C98569D003184F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B74580D2C98569D003184F2 /* Assets.xcassets */; };
 		2B7458112C98569D003184F2 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = 2B7458102C98569D003184F2 /* Base */; };
 		2BBD7BE02C986915003B4801 /* CallViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBD7BDF2C986915003B4801 /* CallViewController.swift */; };
-		2BBD7BE22C986924003B4801 /* CameraSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBD7BE12C986924003B4801 /* CameraSession.swift */; };
 		2BBD7BE62C986938003B4801 /* RTCCustomFrameCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */; };
 		2BCB1DF8AFEE89786F5F8EF3 /* Pods_WebRTCDemo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 38CD77A762034D2B49399C9D /* Pods_WebRTCDemo.framework */; };
+		2BD4B3CB2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3CA2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift */; };
+		2BD4B3CD2F14C00E0092E3C4 /* MessageCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3CC2F14C00E0092E3C4 /* MessageCell.swift */; };
+		2BD4B3CF2F14C4350092E3C4 /* video.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 2BD4B3CE2F14C4350092E3C4 /* video.mp4 */; };
+		2BD4B3D12F14C6E90092E3C4 /* DarwinNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3D02F14C6E90092E3C4 /* DarwinNotificationCenter.swift */; };
+		2BD4B3D32F14CCB60092E3C4 /* DarwinNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3D22F14CCB60092E3C4 /* DarwinNotificationCenter.swift */; };
+		2BD4B3D72F14CCFD0092E3C4 /* FlutterBroadcastScreenCapturer.m in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3D62F14CCFD0092E3C4 /* FlutterBroadcastScreenCapturer.m */; };
+		2BD4B3DA2F14CD030092E3C4 /* FlutterSocketConnection.m in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3D92F14CD030092E3C4 /* FlutterSocketConnection.m */; };
+		2BD4B3DD2F14CD090092E3C4 /* FlutterSocketConnectionFrameReader.m in Sources */ = {isa = PBXBuildFile; fileRef = 2BD4B3DC2F14CD090092E3C4 /* FlutterSocketConnectionFrameReader.m */; };
 		2BF2E2152CA14F2E003EFE08 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2BF2E2142CA14F2E003EFE08 /* ReplayKit.framework */; };
 		2BF2E2182CA14F2E003EFE08 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BF2E2172CA14F2E003EFE08 /* SampleHandler.swift */; };
 		2BF2E21F2CA14F2E003EFE08 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2BF2E2142CA14F2E003EFE08 /* ReplayKit.framework */; };
@@ -62,6 +72,9 @@
 
 /* Begin PBXFileReference section */
 		2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerConnectionClient.swift; sourceTree = "<group>"; };
+		2B6336362F13A74B00CB3CEB /* SampleUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleUploader.swift; sourceTree = "<group>"; };
+		2B6336372F13A74B00CB3CEB /* SocketConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketConnection.swift; sourceTree = "<group>"; };
+		2B6336402F13AE3600CB3CEB /* Atomic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atomic.swift; sourceTree = "<group>"; };
 		2B7458012C98569C003184F2 /* WebRTCDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WebRTCDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B7458042C98569C003184F2 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2B7458062C98569C003184F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -71,8 +84,19 @@
 		2B7458102C98569D003184F2 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		2B7458122C98569D003184F2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2BBD7BDF2C986915003B4801 /* CallViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallViewController.swift; sourceTree = "<group>"; };
-		2BBD7BE12C986924003B4801 /* CameraSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSession.swift; sourceTree = "<group>"; };
 		2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTCCustomFrameCapturer.swift; sourceTree = "<group>"; };
+		2BD4B3CA2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RTCFileVideoCapturer+URL.swift"; sourceTree = "<group>"; };
+		2BD4B3CC2F14C00E0092E3C4 /* MessageCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCell.swift; sourceTree = "<group>"; };
+		2BD4B3CE2F14C4350092E3C4 /* video.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = video.mp4; sourceTree = "<group>"; };
+		2BD4B3D02F14C6E90092E3C4 /* DarwinNotificationCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarwinNotificationCenter.swift; sourceTree = "<group>"; };
+		2BD4B3D22F14CCB60092E3C4 /* DarwinNotificationCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarwinNotificationCenter.swift; sourceTree = "<group>"; };
+		2BD4B3D42F14CCBB0092E3C4 /* WebRTCDemo-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "WebRTCDemo-Bridging-Header.h"; sourceTree = "<group>"; };
+		2BD4B3D52F14CCF70092E3C4 /* FlutterBroadcastScreenCapturer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FlutterBroadcastScreenCapturer.h; sourceTree = "<group>"; };
+		2BD4B3D62F14CCFD0092E3C4 /* FlutterBroadcastScreenCapturer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FlutterBroadcastScreenCapturer.m; sourceTree = "<group>"; };
+		2BD4B3D82F14CD000092E3C4 /* FlutterSocketConnection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FlutterSocketConnection.h; sourceTree = "<group>"; };
+		2BD4B3D92F14CD030092E3C4 /* FlutterSocketConnection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FlutterSocketConnection.m; sourceTree = "<group>"; };
+		2BD4B3DB2F14CD070092E3C4 /* FlutterSocketConnectionFrameReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FlutterSocketConnectionFrameReader.h; sourceTree = "<group>"; };
+		2BD4B3DC2F14CD090092E3C4 /* FlutterSocketConnectionFrameReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FlutterSocketConnectionFrameReader.m; sourceTree = "<group>"; };
 		2BF2E2132CA14F2E003EFE08 /* WebRTCDemoScreenBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WebRTCDemoScreenBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BF2E2142CA14F2E003EFE08 /* ReplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ReplayKit.framework; path = System/Library/Frameworks/ReplayKit.framework; sourceTree = SDKROOT; };
 		2BF2E2172CA14F2E003EFE08 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
@@ -147,17 +171,27 @@
 			isa = PBXGroup;
 			children = (
 				2BF2E2332CA159AE003EFE08 /* WebRTCDemo.entitlements */,
+				2BD4B3CE2F14C4350092E3C4 /* video.mp4 */,
+				2B7458122C98569D003184F2 /* Info.plist */,
 				2B7458042C98569C003184F2 /* AppDelegate.swift */,
+				2BBD7BDF2C986915003B4801 /* CallViewController.swift */,
+				2BD4B3CC2F14C00E0092E3C4 /* MessageCell.swift */,
+				2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */,
+				2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */,
+				2BD4B3CA2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift */,
 				2B7458062C98569C003184F2 /* SceneDelegate.swift */,
 				2B7458082C98569C003184F2 /* ViewController.swift */,
-				2BBD7BDF2C986915003B4801 /* CallViewController.swift */,
-				2BBD7BE12C986924003B4801 /* CameraSession.swift */,
-				2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */,
-				2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */,
-				2B74580A2C98569C003184F2 /* Main.storyboard */,
+				2BD4B3D22F14CCB60092E3C4 /* DarwinNotificationCenter.swift */,
+				2BD4B3D42F14CCBB0092E3C4 /* WebRTCDemo-Bridging-Header.h */,
+				2BD4B3D52F14CCF70092E3C4 /* FlutterBroadcastScreenCapturer.h */,
+				2BD4B3D62F14CCFD0092E3C4 /* FlutterBroadcastScreenCapturer.m */,
+				2BD4B3D82F14CD000092E3C4 /* FlutterSocketConnection.h */,
+				2BD4B3D92F14CD030092E3C4 /* FlutterSocketConnection.m */,
+				2BD4B3DB2F14CD070092E3C4 /* FlutterSocketConnectionFrameReader.h */,
+				2BD4B3DC2F14CD090092E3C4 /* FlutterSocketConnectionFrameReader.m */,
 				2B74580D2C98569D003184F2 /* Assets.xcassets */,
 				2B74580F2C98569D003184F2 /* LaunchScreen.storyboard */,
-				2B7458122C98569D003184F2 /* Info.plist */,
+				2B74580A2C98569C003184F2 /* Main.storyboard */,
 			);
 			path = WebRTCDemo;
 			sourceTree = "<group>";
@@ -166,8 +200,12 @@
 			isa = PBXGroup;
 			children = (
 				2BF2E2342CA159ED003EFE08 /* WebRTCDemoScreenBroadcast.entitlements */,
-				2BF2E2172CA14F2E003EFE08 /* SampleHandler.swift */,
 				2BF2E2192CA14F2E003EFE08 /* Info.plist */,
+				2B6336402F13AE3600CB3CEB /* Atomic.swift */,
+				2BD4B3D02F14C6E90092E3C4 /* DarwinNotificationCenter.swift */,
+				2BF2E2172CA14F2E003EFE08 /* SampleHandler.swift */,
+				2B6336362F13A74B00CB3CEB /* SampleUploader.swift */,
+				2B6336372F13A74B00CB3CEB /* SocketConnection.swift */,
 			);
 			path = WebRTCDemoScreenBroadcast;
 			sourceTree = "<group>";
@@ -275,6 +313,7 @@
 				TargetAttributes = {
 					2B7458002C98569C003184F2 = {
 						CreatedOnToolsVersion = 15.4;
+						LastSwiftMigration = 1610;
 					};
 					2BF2E2122CA14F2E003EFE08 = {
 						CreatedOnToolsVersion = 15.4;
@@ -311,6 +350,7 @@
 			files = (
 				2B74580E2C98569D003184F2 /* Assets.xcassets in Resources */,
 				2B7458112C98569D003184F2 /* Base in Resources */,
+				2BD4B3CF2F14C4350092E3C4 /* video.mp4 in Resources */,
 				2B74580C2C98569C003184F2 /* Base in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -401,12 +441,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				2B0F7E202C9B1FF200EC81C9 /* PeerConnectionClient.swift in Sources */,
-				2BBD7BE22C986924003B4801 /* CameraSession.swift in Sources */,
+				2BD4B3CD2F14C00E0092E3C4 /* MessageCell.swift in Sources */,
 				2B7458092C98569C003184F2 /* ViewController.swift in Sources */,
 				2B7458052C98569C003184F2 /* AppDelegate.swift in Sources */,
+				2BD4B3DD2F14CD090092E3C4 /* FlutterSocketConnectionFrameReader.m in Sources */,
+				2BD4B3D32F14CCB60092E3C4 /* DarwinNotificationCenter.swift in Sources */,
 				2BBD7BE02C986915003B4801 /* CallViewController.swift in Sources */,
+				2BD4B3DA2F14CD030092E3C4 /* FlutterSocketConnection.m in Sources */,
+				2BD4B3D72F14CCFD0092E3C4 /* FlutterBroadcastScreenCapturer.m in Sources */,
 				2B7458072C98569C003184F2 /* SceneDelegate.swift in Sources */,
 				2BBD7BE62C986938003B4801 /* RTCCustomFrameCapturer.swift in Sources */,
+				2BD4B3CB2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -414,7 +459,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2BD4B3D12F14C6E90092E3C4 /* DarwinNotificationCenter.swift in Sources */,
+				2B6336412F13AE3600CB3CEB /* Atomic.swift in Sources */,
 				2BF2E2182CA14F2E003EFE08 /* SampleHandler.swift in Sources */,
+				2B6336382F13A74B00CB3CEB /* SocketConnection.swift in Sources */,
+				2B6336392F13A74B00CB3CEB /* SampleUploader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -587,6 +636,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = WebRTCDemo/WebRTCDemo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -601,6 +651,7 @@
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -609,6 +660,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.ducmai.example.WebRTCDemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "WebRTCDemo/WebRTCDemo-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -621,6 +674,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = WebRTCDemo/WebRTCDemo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -635,6 +689,7 @@
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -643,6 +698,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.ducmai.example.WebRTCDemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "WebRTCDemo/WebRTCDemo-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -660,6 +716,7 @@
 				INFOPLIST_FILE = WebRTCDemoScreenBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = WebRTCDemoScreenBroadcast;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -687,6 +744,7 @@
 				INFOPLIST_FILE = WebRTCDemoScreenBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = WebRTCDemoScreenBroadcast;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
