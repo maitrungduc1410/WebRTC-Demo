@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Enter Room Number Screen</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#137fec",
+              "background-light": "#f6f7f8",
+              "background-dark": "#101922",
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .glass-panel {
+        background: rgba(16, 25, 34, 0.75);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+      body {
+        min-height: max(600px, 100dvh);
+      }
+    </style>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-background-light dark:bg-background-dark font-display overflow-hidden h-screen w-full relative"
+  >
+    <div
+      class="absolute inset-0 z-0 w-full h-full bg-cover bg-center bg-no-repeat bg-[#2c3b4a]"
+      data-alt="Remote participant professional woman smiling during video call"
+      style="
+        background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuACbKOHFnxGXUdcG8ZdcBG32bLZ0v-Ide2viMKwP_8dEzLJku5cAmrfuS7rfHWtKd6e0_IE9HsCsXO-AdJyUe7diSz-jl_oYSu6vrIRBeilSpgRRu0GrtAwHlq9jNIrn5mx9j_90AZuikAk48TtMdkqvqZ-9zF2gPo1Ze3Ua21qQ9uNq7HFdcxzFNFCOzQivWXesk5c52C17kscG_0v0TgPNTnKtAD1W4b9rsTOKuxeiLg3zQ3yC6gKTkM0aautSNQygasTRrQ6TQ');
+      "
+    >
+      <div
+        class="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80 pointer-events-none"
+      ></div>
+    </div>
+    <div
+      class="relative z-10 w-full h-full flex flex-col items-center justify-center px-6"
+    >
+      <div
+        class="w-full max-w-sm glass-panel border border-white/10 rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-8"
+      >
+        <div class="flex flex-col items-center text-center gap-2">
+          <div
+            class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-2 ring-1 ring-white/10 shadow-lg shadow-primary/10"
+          >
+            <span
+              class="material-symbols-outlined text-primary"
+              style="font-size: 32px"
+              >video_call</span
+            >
+          </div>
+          <h1 class="text-white text-2xl font-bold tracking-tight">
+            Join Meeting
+          </h1>
+          <p class="text-white/60 text-sm">
+            Enter a room number to join an existing call or start a random one.
+          </p>
+        </div>
+        <div class="w-full space-y-5">
+          <div class="relative group">
+            <div
+              class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
+            >
+              <span
+                class="material-symbols-outlined text-white/30 group-focus-within:text-primary transition-colors"
+                >tag</span
+              >
+            </div>
+            <input
+              class="block w-full rounded-xl border-0 bg-black/20 py-4 pl-12 pr-4 text-white text-lg placeholder:text-white/20 ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-primary focus:bg-black/30 transition-all text-center tracking-widest font-semibold shadow-inner"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              placeholder="Room Number"
+              type="text"
+            />
+          </div>
+          <div class="flex flex-col gap-3">
+            <button
+              class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/25 transition-all transform active:scale-95 flex items-center justify-center gap-2"
+            >
+              <span>Join Room</span>
+              <span class="material-symbols-outlined text-sm font-bold"
+                >arrow_forward</span
+              >
+            </button>
+            <div class="relative flex items-center py-1">
+              <div class="flex-grow border-t border-white/10"></div>
+              <span
+                class="flex-shrink-0 mx-3 text-white/30 text-[10px] uppercase tracking-wider font-semibold"
+                >Or</span
+              >
+              <div class="flex-grow border-t border-white/10"></div>
+            </div>
+            <button
+              class="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 group active:scale-95"
+            >
+              <span
+                class="material-symbols-outlined text-white/60 group-hover:text-white transition-colors"
+                >shuffle</span
+              >
+              <span>Join Random Room</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="absolute bottom-8">
+        <p class="text-white/20 text-xs font-medium">WebRTC Demo App</p>
+      </div>
+    </div>
+  </body>
+</html>

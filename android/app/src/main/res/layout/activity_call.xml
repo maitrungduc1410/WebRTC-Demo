@@ -1,89 +1,363 @@
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/background_dark">
 
-    <org.webrtc.SurfaceViewRenderer
-        android:id="@+id/local_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentBottom="true"
-        />
+    <!-- Remote Video (Full Screen) -->
 
+    <!-- Gradient Overlay (Top) -->
     <org.webrtc.SurfaceViewRenderer
         android:id="@+id/remote_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <com.google.android.flexbox.FlexboxLayout
-        android:id="@+id/button_container"
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:background="@drawable/gradient_overlay_top" />
+
+    <!-- Gradient Overlay (Bottom) -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="250dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/gradient_overlay_bottom" />
+
+    <!-- Top Bar -->
+    <LinearLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- Spacer to balance layout -->
+            <View
+                android:layout_width="40dp"
+                android:layout_height="40dp" />
+
+            <!-- Call Info (Center) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/room_id"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Room: "
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/participant_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Connecting..."
+                    android:textColor="@color/white_60"
+                    android:textSize="18sp"
+                     />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:id="@+id/status_indicator"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/status_indicator"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/call_duration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00:00"
+                        android:textColor="@color/white_60"
+                        
+                        android:visibility="gone" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Switch Camera Button -->
+            <ImageButton
+                android:id="@+id/switch_camera"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/control_button_background"
+                android:contentDescription="Switch Camera"
+                android:padding="8dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/arrow_triangle_2_circlepath_camera_fill"
+                app:tint="@color/white" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Local Video Preview -->
+    <FrameLayout
+        android:id="@+id/local_view_container"
+        android:layout_width="112dp"
+        android:layout_height="160dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="280dp"
+        android:elevation="8dp"
+        >
+
+        <org.webrtc.SurfaceViewRenderer
+            android:id="@+id/local_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Mute Indicator on Local View -->
+        <ImageView
+            android:id="@+id/local_mute_indicator"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="8dp"
+            android:background="@drawable/mute_indicator_background"
+            android:padding="4dp"
+            android:src="@drawable/mic_slash_fill"
+            android:visibility="gone"
+            app:tint="@color/white" />
+    </FrameLayout>
+
+    <!-- Bottom Controls -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="16dp"
+        android:id="@+id/bottom_controls_container">
+
+        <!-- Secondary Controls (Chat, Share, Speaker) -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <!-- Chat Button -->
+            <LinearLayout
+                android:id="@+id/toggle_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_chat"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Chat"
+                    android:padding="12dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/exclamationmark_bubble_fill"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Chat"
+                    android:textColor="@color/white_60"
+                     />
+            </LinearLayout>
+
+            <!-- Share Screen Button -->
+            <LinearLayout
+                android:id="@+id/share_screen"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_share"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Share Screen"
+                    android:padding="12dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/tv_fill"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Share"
+                    android:textColor="@color/white_60"
+                     />
+            </LinearLayout>
+
+            <!-- Speaker Button -->
+            <LinearLayout
+                android:id="@+id/toggle_speaker"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_speaker"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Speaker"
+                    android:padding="12dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/speaker_wave_3_fill"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Speaker"
+                    android:textColor="@color/white_60"
+                     />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Main Controls Panel -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/control_panel_background"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="24dp">
+
+            <!-- Mute Button -->
+            <LinearLayout
+                android:id="@+id/toggle_audio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_mute"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Mute"
+                    android:padding="16dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/mic_fill"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Mute"
+                    android:textColor="@color/white_60"
+                     />
+            </LinearLayout>
+
+            <!-- Hang Up Button (Larger, Red) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/hang_up"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:background="@drawable/hang_up_button_background"
+                    android:contentDescription="End Call"
+                    android:padding="18dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/phone_down_fill"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="End"
+                    android:textColor="@color/white"
+                    
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Video Button -->
+            <LinearLayout
+                android:id="@+id/toggle_video"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_video"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Video"
+                    android:padding="16dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/video_fill"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Video"
+                    android:textColor="@color/white_60"
+                     />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Message Overlay (Left Side) - Must be last to appear on top -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/messages_overlay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="16dp"
-        app:alignItems="center"
-        app:flexWrap="wrap"
-        app:justifyContent="center"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
-
-        <ImageButton
-            android:id="@+id/toggle_audio"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/circular_button_with_border_ripple"
-            android:src="@drawable/mic_slash_fill" />
-
-        <ImageButton
-            android:id="@+id/toggle_video"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/circular_button_with_border_ripple"
-            android:src="@drawable/video_slash_fill" />
-
-        <ImageButton
-            android:id="@+id/switch_camera"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/circular_button_with_border_ripple"
-            android:src="@drawable/arrow_triangle_2_circlepath_camera_fill" />
-
-        <ImageButton
-            android:id="@+id/toggle_speaker"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/circular_button_with_border_ripple"
-            android:src="@drawable/speaker_wave_3_fill" />
-
-        <ImageButton
-            android:id="@+id/toggle_message"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/circular_button_with_border_ripple"
-            android:src="@drawable/exclamationmark_bubble_fill"
-            />
-
-        <ImageButton
-            android:id="@+id/share_screen"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/circular_button_with_border_ripple"
-            android:src="@drawable/tv_fill" />
-
-        <ImageButton
-            android:id="@+id/hang_up"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/red_button_background_ripple"
-            android:src="@drawable/phone_down_fill" />
-    </com.google.android.flexbox.FlexboxLayout>
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+        android:layout_marginStart="16dp"
+        android:elevation="16dp"
+        android:visibility="gone"
+        android:clipToPadding="false"
+        android:requiresFadingEdge="vertical"
+        android:fadingEdgeLength="60dp" />
+</FrameLayout>

@@ -2,21 +2,27 @@
 <div align="center">
 <h2>A comprehensive WebRTC demo on Web, Android and iOS</h2>
 
-<img src="images/android.jpeg" width="300" />
-<img src="images/ios.jpeg" width="300" />
-<img src="images/desktop.jpg" width="600" />
+<img src="images/home.png" width="200" />
+<img src="images/android.png" width="200" />
+<img src="images/ios.png" width="200" />
+<img src="images/desktop.png" width="600" />
 </div>
  
 # Features
-- Up-to-date with latest WebRTC API. Currently using M125
-- ✅ Audio control
-- ✅ Video control
-- ✅ Switch front/back camera
-- ✅ Switch between microphone vs Speaker
-- ✅ Send message using data channel
-- ✅ Screen sharing. All except iOS
-- End to end encryption. Only Web is supported. Native is in progress...([see below](#end-to-end-encryption))
-- Stream video file. In progress...
+
+| Feature                       | Desktop | iOS | Android |
+|-------------------------------|---------|-----|---------|
+| Video call                    | ✅       | ✅   | ✅       |
+| Front/back camera             | ❌       | ✅   | ✅       |
+| Mute local video              | ✅       | ✅   | ✅       |
+| Mute local audio              | ✅       | ✅   | ✅       |
+| Mute remote video             | ✅       | ❌   | ❌       |
+| Device speaker                | ❌       | ✅   | ✅       |
+| Data channel                  | ✅       | ✅   | ✅       |
+| Share screen                  | ✅       | ❌   | ✅       |
+| Share video from Photos/Files | ✅       | ✅   | ✅       |
+| End to end encryption         | ✅       | ❌   | ❌       |
+
 
 # Disclaimer
 This is intended to show common use cases of WebRTC cross platforms and to give you some ideas, it may have bugs, use with caution!
@@ -28,7 +34,7 @@ First you need to start the signaling server, Open terminal at `signaling-server
 npm install # or yarn install (to install dependencies)
 npm run dev # or yarn dev
 ```
-Once started the address of signling server will be printed in your terminal
+Once started the address of signling server will be printed in your terminal. Something like `192.168.1.1:4000`
 
 ## Start clients
 The usage of all clients are same, you just need to join clients in same room by input same roomID.
@@ -72,13 +78,18 @@ Solution: Update your Xcode project build option ENABLE_USER_SCRIPT_SANDBOXING t
 
 <img src="images/ios_issue_2_solution.png" width="300" />
 
-# End-to-end encryption
+# Discussion
 
-> [!NOTE]  
-> Currently only supported for Web-Web communication
+## End to end encryption on WebRTC
 
-Under `web/src/App.vue`, set `enableE2EE=true` to enable E2EE
+Only support Web for now. Eventhough the owner of webrtc sdk has implemented E2EE for Android/iOS ([See here](https://github.com/webrtc-sdk/webrtc/commit/3a2c008529a15fecde5f979a6ebb75c05463d45e)), but it's pretty different from Web implementation, so need more work to implement cross platform E2EE.
 
-By default, E2EE use Web Worker for encrypt/decrypt, if you want to do that on Main thread then set `useEncryptionWorker=false`
+## Screen sharing on iOS
 
-If you want to verify if E2EE is working, turn on `shouldSendEncryptionKey=true`, then the remote peer won't receive encryptionKey and it will show raw video which is encrypted and not visible
+Learn from [Flutter WebRTC Demo](https://github.com/flutter-webrtc/flutter-webrtc/wiki/iOS-Screen-Sharing), we can share screen on iOS using Broadcast Extension, but currently can only share screen from within our app, if we back to home screen, screen sharing will stop.
+
+There's no solution for now, if you have better idea, file an issue or PR is welcome!
+
+## More than 2 peers in a room
+
+For demo purpose, we only support 1:1 call now, but you can extend it to support more peers by implementing a mesh network or using SFU like [mediasoup](https://mediasoup.org/) or [Janus](https://janus.conf.meetecho.com/).

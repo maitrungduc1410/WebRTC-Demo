@@ -1,7 +1,0 @@
-<!-- res/drawable/red_button_background_ripple.xml -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Ripple effect -->
-    <item android:drawable="@drawable/red_button_ripple_effect" android:state_pressed="true"/>
-    <!-- Default state -->
-    <item android:drawable="@drawable/red_button_shape"/>
-</selector>

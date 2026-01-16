@@ -5,6 +5,8 @@
 //  Created by Duc Trung Mai on 9/16/24.
 //
 
+// NOT IN USED, for demo purpose only
+
 import Foundation
 import WebRTC
 
