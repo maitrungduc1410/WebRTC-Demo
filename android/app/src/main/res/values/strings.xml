@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">WebRTC Demo</string>
-    <string name="serverAddress">http://192.168.0.5:4000</string>
+    <string name="serverAddress">http://192.168.0.4:4000</string>
     <string name="dataChannelName">MyApp Channel</string>
 </resources>

@@ -547,18 +547,14 @@ class CallActivity : AppCompatActivity(), RtcListener {
 
                 val params = messagesOverlay.layoutParams as FrameLayout.LayoutParams
 
-                // Calculate available height between top_bar and bottom_controls
-                val availableHeight = screenHeight - bottomControls.top - topBar.bottom - 300 // -300 to make it clearer, not too near bottom controls
-
                 // Convert 280dp to pixels for width (enough for message bubbles)
                 val widthInDp = 280
                 val widthInPx = (widthInDp * resources.displayMetrics.density).toInt()
 
                 // Set position and size
                 params.topMargin = topBar.bottom
-                params.height = availableHeight
+                params.height = bottomControls.top - 200
                 params.width = widthInPx
-                params.gravity = android.view.Gravity.START or android.view.Gravity.TOP
 
                 messagesOverlay.layoutParams = params
             }
