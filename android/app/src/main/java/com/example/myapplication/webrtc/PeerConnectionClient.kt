@@ -33,6 +33,9 @@ class PeerConnectionClient(
     private var peer: WebRtcPeer? = null
     private var useFrontCamera = true
 
+    private var backgroundProcessor: VirtualBackgroundProcessor? = null
+    private var isBackgroundEnabled = false
+
     companion object {
         private const val TAG = "PeerConnectionClient"
     }
@@ -266,6 +269,10 @@ class PeerConnectionClient(
             videoCapturer = null
         }
 
+        // Clean up virtual background processor
+        backgroundProcessor?.cleanup()
+        backgroundProcessor = null
+
         cleanupMediaResources()
 
         Log.d(TAG, "Closing peer connection.")
@@ -280,6 +287,20 @@ class PeerConnectionClient(
         PeerConnectionFactory.shutdownInternalTracer()
 
         Log.d(TAG, "Cleanup complete.")
+    }
+
+    fun toggleVirtualBackground(enable: Boolean) {
+        isBackgroundEnabled = enable
+        if (enable) {
+            if (backgroundProcessor == null) {
+                backgroundProcessor = VirtualBackgroundProcessor(context, rootEglBase)
+            }
+            videoSource?.setVideoProcessor(backgroundProcessor)
+            Log.d(TAG, "Virtual background enabled")
+        } else {
+            videoSource?.setVideoProcessor(null)
+            Log.d(TAG, "Virtual background disabled")
+        }
     }
 
     // ========== Private Helper Methods ==========

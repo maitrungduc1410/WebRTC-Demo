@@ -1,0 +1,45 @@
+<!-- Copyright 2023 The MediaPipe Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. -->
+
+<link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
+<script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
+
+<h1>Segmenting images using the MediaPipe Image Segmentation Task</h1>
+
+<section id="demos" class="invisible">
+  <h2>Demo: Segmenting Images</h2>
+  <p><b>Click on an image below</b> to see its Segmentation.</p>
+  <div class="segmentOnClick">
+    <canvas class="removed"></canvas>
+    <img src="https://assets.codepen.io/9177687/dog_flickr_publicdomain.jpeg" crossorigin="anonymous" title="Click to get segmentation!" />
+        <p class="classification removed">
+  </div>
+  <div class="segmentOnClick">
+    <canvas class="removed"></canvas>
+    <img src="https://assets.codepen.io/9177687/cat_flickr_publicdomain.jpeg" crossorigin="anonymous" title="Click to get segmentation!" />
+        <p class="classification removed">
+  </div>
+
+  <h2>Demo: Webcam continuous segmentation</h2>
+  <p>Hold some objects up close to your webcam to get real-time segmentation.</br>Click <b>enable webcam</b> below and grant access to the webcam if prompted.</p>
+
+  <div class="webcam">
+    <button id="webcamButton" class="mdc-button mdc-button--raised">
+      <span class="mdc-button__ripple"></span>
+      <span class="mdc-button__label">ENABLE WEBCAM</span>
+    </button>
+    <video id="webcam" autoplay style="display: none;"></video>
+    <canvas id="canvas" width="1280px" height="720px"></canvas>
+  </div>
+</section>

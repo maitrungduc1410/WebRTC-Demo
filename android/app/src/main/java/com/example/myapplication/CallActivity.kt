@@ -92,6 +92,9 @@ class CallActivity : AppCompatActivity(), RtcListener {
     private var messageBottomSheet: BottomSheetDialog? = null
     private lateinit var btnChat: ImageButton
 
+//    val btnBackground = findViewById<ImageButton>(R.id.btn_background)
+    var backgroundEnabled = false
+
     // Activity Result API for screen capture
     private val screenCaptureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -419,6 +422,25 @@ class CallActivity : AppCompatActivity(), RtcListener {
                 remoteView.layoutParams = remoteParams
             }
         }, 1F)
+
+        val btnBackground = findViewById<ImageButton>(R.id.btn_background)
+        btnBackground.setOnClickListener {
+            backgroundEnabled = !backgroundEnabled
+
+            // Toggle processing in PeerConnectionClient
+            peerConnectionClient?.toggleVirtualBackground(backgroundEnabled)
+
+            // Highlight the button
+            if (backgroundEnabled) {
+//                btnBackground.setBackgroundResource(R.drawable.control_button_background_active) // Create a highlighted drawable
+                btnBackground.setColorFilter(android.graphics.Color.GREEN)
+                onStatusChanged("Virtual background on")
+            } else {
+                btnBackground.setBackgroundResource(R.drawable.secondary_control_button_background)
+                btnBackground.clearColorFilter()
+                onStatusChanged("Virtual background off")
+            }
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
