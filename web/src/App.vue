@@ -18,7 +18,9 @@ import {
   Send,
   AlertCircle,
   FileVideo,
+  Wallpaper,
 } from 'lucide-vue-next';
+import { ImageSegmenter, FilesetResolver } from '@mediapipe/tasks-vision';
 
 const BASE_URL = 'http://localhost:4000'
 const roomId = ref<string>('')
@@ -42,6 +44,17 @@ const isScreenSharing = ref(false)
 const showMessageSheet = ref(false)
 const showShareMenu = ref(false)
 const isVideoFileSharing = ref(false)
+const isBackgroundEffectEnabled = ref(false)
+
+// Background effect variables
+let imageSegmenter: ImageSegmenter | null = null
+let backgroundCanvas: HTMLCanvasElement | null = null
+let backgroundCtx: CanvasRenderingContext2D | null = null
+let processedStream: MediaStream | null = null
+let animationFrameId: number | null = null
+let backgroundImage: HTMLImageElement | null = null
+let hiddenVideoElement: HTMLVideoElement | null = null
+let originalCameraStream: MediaStream | null = null
 
 // Draggable local video - start at top-right corner
 const localVideoX = ref(window.innerWidth - 144) // 128px width + 16px padding
@@ -377,6 +390,16 @@ function leaveRoom() {
     encryptionWorker = undefined
   }
 
+  // Clean up background effect
+  if (isBackgroundEffectEnabled.value) {
+    stopBackgroundProcessing()
+    isBackgroundEffectEnabled.value = false
+  }
+  if (imageSegmenter) {
+    imageSegmenter.close()
+    imageSegmenter = null
+  }
+
   // Clean up resize listener
   window.removeEventListener('resize', updateRemoteVideoDimensions)
 
@@ -388,9 +411,14 @@ function leaveRoom() {
 }
 
 function initPeerEvents() {
-  if (localStream) {
-    localStream.getTracks().forEach(track => {
-      peerConnection!.addTrack(track, localStream!)
+  // If background effect is enabled, send processed stream instead of original
+  const streamToSend = isBackgroundEffectEnabled.value && processedStream 
+    ? processedStream 
+    : localStream;
+    
+  if (streamToSend) {
+    streamToSend.getTracks().forEach(track => {
+      peerConnection!.addTrack(track, streamToSend!)
     })
   }
 
@@ -525,7 +553,8 @@ function onDisconnected() {
     peersConnected.value = false
   }
 
-  setVideoFromRemoteStream()
+  // Reset remote stream so it gets recreated on rejoin
+  remoteStream = null
 }
 
 function initDataChannelEvents() {
@@ -868,6 +897,217 @@ function updateRemoteVideoDimensions() {
     };
   }
 }
+
+// Background Effect Functions
+async function initializeBackgroundEffect() {
+  try {
+    // Load background image
+    backgroundImage = new Image();
+    backgroundImage.src = '/virtual_background.jpg';
+    await new Promise((resolve, reject) => {
+      backgroundImage!.onload = resolve;
+      backgroundImage!.onerror = reject;
+    });
+
+    // Initialize MediaPipe Image Segmenter
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+    );
+    
+    imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      outputCategoryMask: true,
+      outputConfidenceMasks: false,
+    });
+
+    console.log('Background effect initialized');
+  } catch (error) {
+    console.error('Failed to initialize background effect:', error);
+  }
+}
+
+async function toggleBackgroundEffect() {
+  if (!isBackgroundEffectEnabled.value) {
+    // Enable background effect
+    if (!imageSegmenter) {
+      await initializeBackgroundEffect();
+    }
+    
+    if (imageSegmenter && localStream) {
+      startBackgroundProcessing();
+      isBackgroundEffectEnabled.value = true;
+    }
+  } else {
+    // Disable background effect
+    stopBackgroundProcessing();
+    isBackgroundEffectEnabled.value = false;
+  }
+}
+
+function startBackgroundProcessing() {
+  if (!localStream) return;
+
+  // Store original camera stream
+  originalCameraStream = localStream;
+
+  // Create hidden video element for the original camera stream (for segmentation)
+  if (!hiddenVideoElement) {
+    hiddenVideoElement = document.createElement('video');
+    hiddenVideoElement.autoplay = true;
+    hiddenVideoElement.playsInline = true;
+    hiddenVideoElement.muted = true;
+
+    // // Do not use display:none as it may prevent video from playing
+    hiddenVideoElement.style.position = 'absolute';
+    hiddenVideoElement.style.width = '1px';
+    hiddenVideoElement.style.height = '1px';
+    hiddenVideoElement.style.opacity = '0';
+    hiddenVideoElement.style.pointerEvents = 'none';
+    document.body.appendChild(hiddenVideoElement);
+  }
+  
+  hiddenVideoElement.srcObject = originalCameraStream;
+
+  // Create canvas for processing
+  if (!backgroundCanvas) {
+    backgroundCanvas = document.createElement('canvas');
+    backgroundCtx = backgroundCanvas.getContext('2d', { willReadFrequently: false });
+  }
+
+  // Wait for hidden video to be ready
+  hiddenVideoElement.onloadedmetadata = () => {
+    if (!hiddenVideoElement) return;
+
+    const processFrame = () => {
+      if (!isBackgroundEffectEnabled.value || !imageSegmenter || !backgroundCtx || !backgroundCanvas || !hiddenVideoElement) {
+        return;
+      }
+
+      const width = hiddenVideoElement.videoWidth;
+      const height = hiddenVideoElement.videoHeight;
+
+      if (width === 0 || height === 0) {
+        animationFrameId = requestAnimationFrame(processFrame);
+        return;
+      }
+
+      // Set canvas size to match video
+      if (backgroundCanvas.width !== width || backgroundCanvas.height !== height) {
+        backgroundCanvas.width = width;
+        backgroundCanvas.height = height;
+      }
+
+      // Segment the image
+      const startTimeMs = performance.now();
+      imageSegmenter.segmentForVideo(hiddenVideoElement, startTimeMs, (result) => {
+        if (!backgroundCtx || !backgroundCanvas || !backgroundImage || !hiddenVideoElement) return;
+        if (!result.categoryMask) return;
+
+        const mask = result.categoryMask.getAsUint8Array();
+        
+        // Get video frame
+        backgroundCtx.drawImage(hiddenVideoElement, 0, 0, width, height);
+        const videoImageData = backgroundCtx.getImageData(0, 0, width, height);
+        
+        // Get background image
+        backgroundCtx.drawImage(backgroundImage, 0, 0, width, height);
+        const bgImageData = backgroundCtx.getImageData(0, 0, width, height);
+        
+        // Create blended output
+        const outputImageData = backgroundCtx.createImageData(width, height);
+        
+        // Blend: mask value 0 = person (use video), 1 = background (use bg image)
+        for (let i = 0; i < mask.length; i++) {
+          const offset = i * 4;
+          
+          if (mask[i] === 0) {
+            // Person pixel - use video
+            outputImageData.data[offset] = videoImageData.data[offset];
+            outputImageData.data[offset + 1] = videoImageData.data[offset + 1];
+            outputImageData.data[offset + 2] = videoImageData.data[offset + 2];
+            outputImageData.data[offset + 3] = 255;
+          } else {
+            // Background pixel - use background image
+            outputImageData.data[offset] = bgImageData.data[offset];
+            outputImageData.data[offset + 1] = bgImageData.data[offset + 1];
+            outputImageData.data[offset + 2] = bgImageData.data[offset + 2];
+            outputImageData.data[offset + 3] = 255;
+          }
+        }
+        
+        backgroundCtx.putImageData(outputImageData, 0, 0);
+      });
+
+      animationFrameId = requestAnimationFrame(processFrame);
+    };
+
+    // Start processing
+    processFrame();
+
+    // Create stream from canvas
+    // @ts-ignore
+    processedStream = backgroundCanvas.captureStream(30);
+    const videoTrack = processedStream.getVideoTracks()[0];
+    
+    // Replace video track in peer connection
+    if (peerConnection) {
+      const senders = peerConnection.getSenders();
+      const videoSender = senders.find(sender => sender.track?.kind === 'video');
+      if (videoSender) {
+        videoSender.replaceTrack(videoTrack);
+      }
+    }
+
+    // Display the processed canvas in the local video element
+    const localVideoElement = document.getElementById('local') as HTMLVideoElement;
+    if (localVideoElement) {
+      localVideoElement.srcObject = processedStream;
+    }
+  };
+}
+
+function stopBackgroundProcessing() {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  if (processedStream) {
+    processedStream.getTracks().forEach(track => track.stop());
+    processedStream = null;
+  }
+
+  // Remove hidden video element
+  if (hiddenVideoElement) {
+    hiddenVideoElement.srcObject = null;
+    if (hiddenVideoElement.parentNode) {
+      hiddenVideoElement.parentNode.removeChild(hiddenVideoElement);
+    }
+    hiddenVideoElement = null;
+  }
+
+  // Restore original video stream to local video element
+  const videoElement = document.getElementById('local') as HTMLVideoElement;
+  if (videoElement && originalCameraStream) {
+    videoElement.srcObject = originalCameraStream;
+    
+    // Restore original track in peer connection
+    if (peerConnection) {
+      const videoTrack = originalCameraStream.getVideoTracks()[0];
+      const senders = peerConnection.getSenders();
+      const videoSender = senders.find(sender => sender.track?.kind === 'video');
+      if (videoSender) {
+        videoSender.replaceTrack(videoTrack);
+      }
+    }
+  }
+
+  originalCameraStream = null;
+}
 </script>
 
 <template>
@@ -1049,6 +1289,17 @@ function updateRemoteVideoDimensions() {
             <VolumeX v-else :size="20" />
           </div>
           <span class="text-[10px] font-medium text-white/80">Mute Remote</span>
+        </button>
+
+        <button @click="toggleBackgroundEffect" class="cursor-pointer flex flex-col items-center gap-2 group">
+          <div
+            :class="[
+              'flex items-center justify-center w-12 h-12 rounded-full glass-panel hover:bg-white/10 transition-colors text-white border border-white/5 shadow-sm',
+              isBackgroundEffectEnabled ? '!bg-blue-500/50 !border-blue-400/50' : ''
+            ]">
+            <Wallpaper :size="20" />
+          </div>
+          <span class="text-[10px] font-medium text-white/80">Background</span>
         </button>
       </div>
 

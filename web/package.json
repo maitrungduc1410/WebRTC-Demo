@@ -9,16 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
     "@tailwindcss/vite": "^4.1.18",
     "lucide-vue-next": "^0.562.0",
-    "socket.io-client": "^4.7.5",
+    "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.1.18",
-    "vue": "^3.4.37"
+    "vue": "^3.5.26"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.1.2",
-    "typescript": "^5.5.3",
-    "vite": "^5.4.1",
-    "vue-tsc": "^2.0.29"
+    "@vitejs/plugin-vue": "^6.0.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vue-tsc": "^3.2.2"
   }
 }
