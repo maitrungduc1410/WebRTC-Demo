@@ -21,6 +21,7 @@
 | Data channel                  | ✅       | ✅   | ✅       |
 | Share screen                  | ✅       | ❌   | ✅       |
 | Share video from Photos/Files | ✅       | ✅   | ✅       |
+| Virtual background            | ✅       | ❌   | ❌       |
 | End to end encryption         | ✅       | ❌   | ❌       |
 
 
@@ -93,3 +94,7 @@ There's no solution for now, if you have better idea, file an issue or PR is wel
 ## More than 2 peers in a room
 
 For demo purpose, we only support 1:1 call now, but you can extend it to support more peers by implementing a mesh network or using SFU like [mediasoup](https://mediasoup.org/) or [Janus](https://janus.conf.meetecho.com/).
+
+## Virtual background on mobile
+
+Currently we only support virtual background on Web using MediaPipe. Though MediaPipe also supports Android/iOS, but integrating it with WebRTC native sdk is not straight forward. We are working on it, if you have good idea or solution, please file an issue or PR!
