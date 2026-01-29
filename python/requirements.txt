@@ -1,0 +1,9 @@
+aiortc
+aiohttp
+aiohttp-requests
+opencv-python
+python-socketio==5.7.2
+eventlet
+cryptography
+pillow
+PyQt5
