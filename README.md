@@ -49,6 +49,8 @@ npm run dev
 ```
 Then open 2 browsers at `localhost:5173` to test
 
+> If sinaling server is not in the same machine with web, then you need to update `BASE_URL` in web/src/App.vue
+
 ### Android 
 
 Change the value of `serverAddress` in `android/app/src/main/res/values/strings.xml` to server IP which is printed when you start the signaling server
