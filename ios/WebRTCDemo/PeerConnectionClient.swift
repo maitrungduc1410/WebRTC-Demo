@@ -285,15 +285,17 @@ candidate,
         
         if self.customFrameCapturer {
             self.videoCapturer = RTCCustomFrameCapturer(delegate: videoSource!)
-        }else if TARGET_OS_SIMULATOR != 0 {
-            print("now runnnig on simulator...")
-            self.videoCapturer = RTCFileVideoCapturer(delegate: videoSource!)
         }
         else {
+            #if targetEnvironment(simulator)
+            print("now runnnig on simulator...")
+            self.videoCapturer = RTCFileVideoCapturer(delegate: videoSource!)
+            #else
             // The capturer only keeps a weak delegate, so the processor is retained here
             let processor = VirtualBackgroundProcessor(output: videoSource!)
             self.virtualBackgroundProcessor = processor
             self.videoCapturer = RTCCameraVideoCapturer(delegate: processor)
+            #endif
         }
         let videoTrack = self.peerConnectionFactory.videoTrack(
             with: videoSource!,
