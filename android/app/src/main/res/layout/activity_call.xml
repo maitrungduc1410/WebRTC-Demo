@@ -154,9 +154,9 @@
         android:paddingVertical="16dp"
         android:id="@+id/bottom_controls_container">
 
-        <!-- Secondary Controls (Chat, Share, Speaker) -->
+        <!-- Secondary Controls (Chat, Share, Speaker, Mute Peer, Background), equal width so five fit on a 360dp screen -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
             android:gravity="center"
@@ -165,9 +165,9 @@
             <!-- Chat Button -->
             <LinearLayout
                 android:id="@+id/toggle_message"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
+                android:layout_weight="1"
                 android:gravity="center"
                 android:orientation="vertical">
 
@@ -186,17 +186,18 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
+                    android:maxLines="1"
                     android:text="Chat"
                     android:textColor="@color/white_60"
-                     />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <!-- Share Screen Button -->
             <LinearLayout
                 android:id="@+id/share_screen"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
+                android:layout_weight="1"
                 android:gravity="center"
                 android:orientation="vertical">
 
@@ -215,17 +216,18 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
+                    android:maxLines="1"
                     android:text="Share"
                     android:textColor="@color/white_60"
-                     />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <!-- Speaker Button -->
             <LinearLayout
                 android:id="@+id/toggle_speaker"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
+                android:layout_weight="1"
                 android:gravity="center"
                 android:orientation="vertical">
 
@@ -244,17 +246,48 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
+                    android:maxLines="1"
                     android:text="Speaker"
                     android:textColor="@color/white_60"
-                     />
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Mute Remote Audio Button -->
+            <LinearLayout
+                android:id="@+id/toggle_remote_audio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_remote_audio"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Mute Peer"
+                    android:padding="12dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/volume_up"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:maxLines="1"
+                    android:text="Mute Peer"
+                    android:textColor="@color/white_60"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <!-- Background Button -->
             <LinearLayout
                 android:id="@+id/toggle_background"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
+                android:layout_weight="1"
                 android:gravity="center"
                 android:orientation="vertical">
 
@@ -273,9 +306,10 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
+                    android:maxLines="1"
                     android:text="Background"
                     android:textColor="@color/white_60"
-                     />
+                    android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
 

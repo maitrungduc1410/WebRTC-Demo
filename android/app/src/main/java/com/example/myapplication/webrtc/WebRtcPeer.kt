@@ -14,12 +14,16 @@ class WebRtcPeer(
     private val pcConstraints: MediaConstraints,
     private val listener: RtcListener,
     private val signalingHandler: SignalingHandler,
-    private val e2ee: E2eeManager? = null
+    private val e2ee: E2eeManager? = null,
+    private var remoteAudioEnabled: Boolean = true
 ) : SdpObserver, PeerConnection.Observer, DataChannel.Observer {
 
     val peerConnection: PeerConnection
     private var dataChannel: DataChannel? = null
     private var disposed = false
+
+    // Owned by the receivers delivered in onAddTrack, which live as long as the peer connection
+    private val remoteAudioTracks = mutableListOf<AudioTrack>()
 
     // Strong references: a garbage-collected FrameCryptor would leave the native transformer dangling.
     private val senderCryptors = mutableMapOf<String, FrameCryptor>()
@@ -99,6 +103,16 @@ class WebRtcPeer(
         return peerConnection.senders
     }
     
+    /** Only mutes local playout; the remote peer is not notified. */
+    fun setRemoteAudioEnabled(enabled: Boolean) {
+        val tracks = synchronized(this) {
+            if (disposed) return
+            remoteAudioEnabled = enabled
+            remoteAudioTracks.toList()
+        }
+        tracks.forEach { it.setEnabled(enabled) }
+    }
+
     fun replaceVideoTrack(newTrack: VideoTrack) {
         val senders = peerConnection.senders
         val videoSender = senders.find { it.track()?.kind() == "video" }
@@ -109,6 +123,7 @@ class WebRtcPeer(
         synchronized(this) {
             if (disposed) return
             disposed = true
+            remoteAudioTracks.clear()
         }
         dataChannel?.let {
             it.unregisterObserver()
@@ -267,6 +282,14 @@ class WebRtcPeer(
     override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
         Log.d(TAG, "onAddTrack ${receiver.track()?.kind()}")
         attachReceiverCryptor(receiver)
+
+        val audioTrack = receiver.track() as? AudioTrack ?: return
+        val enabled = synchronized(this) {
+            if (disposed) return
+            remoteAudioTracks.add(audioTrack)
+            remoteAudioEnabled
+        }
+        audioTrack.setEnabled(enabled)
     }
 
     override fun onRemoveStream(mediaStream: MediaStream) {

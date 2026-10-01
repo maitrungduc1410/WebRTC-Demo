@@ -44,6 +44,9 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     
     private var isSwitchingCamera = false
     
+    // Only mutes local playout; the remote peer is not notified
+    private var isRemoteAudioEnabled = true
+    
     // Video file sharing properties
     private var fileVideoCapturer: RTCFileVideoCapturer?
     private var isFileSharingActive = false
@@ -143,7 +146,7 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
             self.peerConnection!.add(localAudioTrack, streamIds: ["stream0"])
         }
         attachSenderCryptors()
-        applyE2EECodecPreferences()
+        applyVideoCodecPreferences()
         
         makeOffer(onSuccess: onSuccess)
     }
@@ -191,7 +194,7 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
             
             print("succeed to set remote offer SDP")
             self.attachReceiverCryptors()
-            self.applyE2EECodecPreferences()
+            self.applyVideoCodecPreferences()
             self.makeAnswer(onCreateAnswer: onCreateAnswer)
         }
     }
@@ -302,6 +305,21 @@ candidate,
             trackId: "video0"
         )
         return videoTrack
+    }
+    
+    // VP8 always comes first: H264 uses the VideoToolbox hardware encoder, which iOS invalidates while
+    // the app is in the background, so a screen share would freeze as soon as the user leaves the app.
+    // VP8 is encoded in software and keeps running. It is also the codec web/Android prefer under E2EE.
+    private func applyVideoCodecPreferences() {
+        guard let peerConnection = peerConnection else { return }
+        
+        let codecs = peerConnectionFactory.rtpReceiverCapabilities(forKind: "video").codecs
+        let isVP8: (RTCRtpCodecCapability) -> Bool = { $0.mimeType.lowercased() == "video/vp8" }
+        let preferred = codecs.filter(isVP8) + codecs.filter { !isVP8($0) }
+        
+        for transceiver in peerConnection.transceivers where transceiver.mediaType == .video {
+            transceiver.codecPreferences = preferred
+        }
     }
     
     private func startCaptureLocalVideo(
@@ -512,6 +530,7 @@ extension WebRTCClient {
     ) {
         print("did add receiver: ", rtpReceiver.receiverId)
         attachReceiverCryptor(rtpReceiver)
+        applyRemoteAudioEnabled(rtpReceiver)
     }
     
     func peerConnection(
@@ -665,6 +684,15 @@ extension WebRTCClient {
         localAudioTrack.isEnabled = enable
     }
     
+    func setRemoteAudioEnabled(_ enabled: Bool) {
+        isRemoteAudioEnabled = enabled
+        peerConnection?.receivers.forEach { applyRemoteAudioEnabled($0) }
+    }
+    
+    private func applyRemoteAudioEnabled(_ receiver: RTCRtpReceiver) {
+        (receiver.track as? RTCAudioTrack)?.isEnabled = isRemoteAudioEnabled
+    }
+    
     func switchCamera() {
         print("switch camera")
         
@@ -795,17 +823,8 @@ extension WebRTCClient {
         DarwinNotificationCenter.shared.removeObserver(self, for: .broadcastStarted)
         DarwinNotificationCenter.shared.removeObserver(self, for: .broadcastStopped)
         
-        // End background task
+        // End background task. The audio session stays active: deactivating it stops the call's audio I/O
         endBackgroundTask()
-        
-        do {
-            try audioSession?.setActive(false, options: .notifyOthersOnDeactivation)
-            print("Audio session deactivated successfully.")
-            
-        } catch {
-            print("Failed to deactivate audio session: \(error.localizedDescription)")
-            // Common errors include attempting to deactivate while I/O is still running
-        }
         
         // Restart camera capture (same as file sharing)
         if originalCapturer is RTCCameraVideoCapturer {
@@ -840,8 +859,6 @@ extension WebRTCClient {
         print("Ending background task: \(backgroundTask.rawValue)")
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
-        isScreenSharing = false
-        print("Switched back to camera")
     }
     
     func showBroadcastPicker() {
@@ -1177,19 +1194,6 @@ extension WebRTCClient {
         cryptors.forEach { $0.delegate = nil }
         if !cryptors.isEmpty {
             print("disposed \(cryptors.count) frame cryptors")
-        }
-    }
-    
-    // Same order as web/Android so every platform negotiates VP8 when E2EE is on
-    private func applyE2EECodecPreferences() {
-        guard isE2EEEnabled, let peerConnection = peerConnection else { return }
-        
-        let codecs = peerConnectionFactory.rtpReceiverCapabilities(forKind: "video").codecs
-        let isVP8: (RTCRtpCodecCapability) -> Bool = { $0.mimeType.lowercased() == "video/vp8" }
-        let preferred = codecs.filter(isVP8) + codecs.filter { !isVP8($0) }
-        
-        for transceiver in peerConnection.transceivers where transceiver.mediaType == .video {
-            transceiver.codecPreferences = preferred
         }
     }
 }

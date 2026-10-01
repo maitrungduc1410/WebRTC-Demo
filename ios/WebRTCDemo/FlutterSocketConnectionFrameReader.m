@@ -3,7 +3,7 @@
 //  WebRTCDemo
 //
 //  Frame reader that receives video frames from the broadcast extension via socket connection
-//  Copy from: https://github.com/livekit/client-sdk-flutter/tree/main/example/ios/LiveKit%20Broadcast%20Extension
+//  Copy from: https://github.com/flutter-webrtc/flutter-webrtc/tree/main/ios/flutter_webrtc/Sources/flutter_webrtc/Broadcast
 
 #include <mach/mach_time.h>
 
@@ -38,115 +38,89 @@ const NSUInteger kMaxReadLength = 10 * 1024;
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _framedMessage = CFHTTPMessageCreateEmpty(kCFAllocatorDefault, FALSE);
+    self.imageBuffer = NULL;
   }
 
   return self;
 }
 
 - (void)dealloc {
+  CVPixelBufferRelease(_imageBuffer);
   if (_framedMessage) {
     CFRelease(_framedMessage);
   }
-  if (_imageBuffer) {
-    CVPixelBufferRelease(_imageBuffer);
-  }
 }
 
+/** Returns the amount of missing bytes to complete the message, or -1 when not enough bytes were
+ * provided to compute the message length */
 - (NSInteger)appendBytes:(UInt8*)buffer length:(NSUInteger)length {
-  BOOL success = CFHTTPMessageAppendBytes(self.framedMessage, buffer, length);
+  if (!_framedMessage) {
+    _framedMessage = CFHTTPMessageCreateEmpty(kCFAllocatorDefault, false);
+  }
 
-  if (!success) {
-    NSLog(@"Failed to append bytes to message");
+  CFHTTPMessageAppendBytes(_framedMessage, buffer, length);
+  if (!CFHTTPMessageIsHeaderComplete(_framedMessage)) {
     return -1;
   }
 
-  if (CFHTTPMessageIsHeaderComplete(self.framedMessage)) {
-    CFDataRef bodyData = CFHTTPMessageCopyBody(self.framedMessage);
-    CFStringRef contentLengthString =
-        CFHTTPMessageCopyHeaderFieldValue(self.framedMessage, (__bridge CFStringRef) @"Content-Length");
+  NSInteger contentLength = [CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(
+      _framedMessage, (__bridge CFStringRef) @"Content-Length")) integerValue];
+  NSInteger bodyLength =
+      (NSInteger)[CFBridgingRelease(CFHTTPMessageCopyBody(_framedMessage)) length];
 
-    NSInteger contentLength = [(__bridge NSString*)contentLengthString integerValue];
+  NSInteger missingBytesCount = contentLength - bodyLength;
+  if (missingBytesCount == 0) {
+    BOOL success = [self unwrapMessage:self.framedMessage];
+    self.didComplete(success, self);
 
-    if (bodyData) {
-      NSInteger bodyLength = CFDataGetLength(bodyData);
-
-      if (bodyLength >= contentLength) {
-        NSData* imageData = (__bridge_transfer NSData*)bodyData;
-
-        [self extractBufferFromData:imageData];
-
-        if (self.didComplete) {
-          dispatch_async(dispatch_get_main_queue(), ^{
-            self.didComplete(YES, self);
-          });
-        }
-
-        if (contentLengthString) {
-          CFRelease(contentLengthString);
-        }
-
-        return 0;
-      }
-
-      CFRelease(bodyData);
-    }
-
-    if (contentLengthString) {
-      CFRelease(contentLengthString);
-    }
-
-    return contentLength;
+    CFRelease(self.framedMessage);
+    self.framedMessage = NULL;
   }
 
-  return kMaxReadLength;
+  return missingBytesCount;
 }
 
-- (void)extractBufferFromData:(NSData*)data {
-  CFStringRef orientationString =
-      CFHTTPMessageCopyHeaderFieldValue(self.framedMessage, (__bridge CFStringRef) @"Buffer-Orientation");
-  self.imageOrientation = [(__bridge NSString*)orientationString intValue];
-  if (orientationString) {
-    CFRelease(orientationString);
-  }
+// MARK: Private Methods
 
-  CFStringRef widthString =
-      CFHTTPMessageCopyHeaderFieldValue(self.framedMessage, (__bridge CFStringRef) @"Buffer-Width");
-  int width = [(__bridge NSString*)widthString intValue];
-  if (widthString) {
-    CFRelease(widthString);
-  }
+- (CIContext*)imageContext {
+  // Initializing a CIContext object is costly, so we use a singleton instead
+  static CIContext* imageContext = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    imageContext = [[CIContext alloc] initWithOptions:nil];
+  });
 
-  CFStringRef heightString =
-      CFHTTPMessageCopyHeaderFieldValue(self.framedMessage, (__bridge CFStringRef) @"Buffer-Height");
-  int height = [(__bridge NSString*)heightString intValue];
-  if (heightString) {
-    CFRelease(heightString);
-  }
-
-  NSDictionary* pixelBufferAttributes = @{
-    (id)kCVPixelBufferWidthKey : @(width),
-    (id)kCVPixelBufferHeightKey : @(height),
-    (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
-    (id)kCVPixelBufferIOSurfacePropertiesKey : @{}
-  };
-
-  CVPixelBufferRef pixelBuffer;
-  CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
-                      (__bridge CFDictionaryRef)pixelBufferAttributes, &pixelBuffer);
-
-  [self writeImageData:data intoPixelBuffer:&pixelBuffer];
-
-  _imageBuffer = pixelBuffer;
+  return imageContext;
 }
 
-- (void)writeImageData:(NSData*)data intoPixelBuffer:(CVPixelBufferRef*)pixelBuffer {
-  CIContext* imageContext = [CIContext context];
-  CIImage* image = [CIImage imageWithData:data];
+- (BOOL)unwrapMessage:(CFHTTPMessageRef)framedMessage {
+  size_t width = [CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(
+      _framedMessage, (__bridge CFStringRef) @"Buffer-Width")) integerValue];
+  size_t height = [CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(
+      _framedMessage, (__bridge CFStringRef) @"Buffer-Height")) integerValue];
+  _imageOrientation = [CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(
+      _framedMessage, (__bridge CFStringRef) @"Buffer-Orientation")) intValue];
 
+  NSData* messageData = CFBridgingRelease(CFHTTPMessageCopyBody(_framedMessage));
+
+  // Copy the pixel buffer
+  CVReturn status = CVPixelBufferCreate(kCFAllocatorDefault, width, height,
+                                        kCVPixelFormatType_32BGRA, NULL, &_imageBuffer);
+  if (status != kCVReturnSuccess) {
+    NSLog(@"CVPixelBufferCreate failed");
+    return false;
+  }
+
+  [self copyImageData:messageData toPixelBuffer:&_imageBuffer];
+
+  return true;
+}
+
+- (void)copyImageData:(NSData*)data toPixelBuffer:(CVPixelBufferRef*)pixelBuffer {
   CVPixelBufferLockBaseAddress(*pixelBuffer, 0);
 
-  [imageContext render:image toCVPixelBuffer:*pixelBuffer];
+  CIImage* image = [CIImage imageWithData:data];
+  [self.imageContext render:image toCVPixelBuffer:*pixelBuffer];
 
   CVPixelBufferUnlockBaseAddress(*pixelBuffer, 0);
 }

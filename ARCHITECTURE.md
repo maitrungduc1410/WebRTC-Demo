@@ -71,6 +71,7 @@ WebRTC-Demo/
 │   │       ├── E2eeManager.kt           FrameCryptor key provider
 │   │       ├── Mp4VideoCapturer.kt      Video file -> SurfaceTexture capturer
 │   │       └── vbg/                     Virtual background (MediaPipe + GLES)
+│   ├── java/org/webrtc/Camera{1,2}Helper.kt  Camera capture formats (package-private webrtc API)
 │   └── assets/selfie_segmenter.tflite
 └── ios/
     ├── WebRTCDemo/
@@ -78,7 +79,8 @@ WebRTC-Demo/
     │   ├── CallViewController.swift     Call UI + Socket.IO signaling
     │   ├── PeerConnectionClient.swift   class WebRTCClient: factory, tracks, capturers, E2EE
     │   ├── VirtualBackgroundProcessor.swift  Vision + Core Image proxy capturer delegate
-    │   └── FlutterBroadcastScreenCapturer.*  Receives frames from the broadcast extension
+    │   ├── FlutterBroadcastScreenCapturer.*  Screen capturer fed by the broadcast extension
+    │   └── FlutterSocketConnection*.*        Unix socket server + frame reader (from flutter-webrtc)
     ├── WebRTCDemoScreenBroadcast/       ReplayKit upload extension
     └── Podfile
 ```
@@ -141,7 +143,7 @@ sequenceDiagram
         S->>A: remote peer received encryption key
     end
 
-    A->>A: create RTCPeerConnection, add local tracks,<br/>attach encryptors, prefer VP8 when E2EE
+    A->>A: create RTCPeerConnection, add local tracks,<br/>attach encryptors, prefer VP8 (E2EE, or always on iOS)
     A->>S: offer
     S->>B: offer
     B->>B: create RTCPeerConnection, add local tracks,<br/>setRemoteDescription, attach decryptors
@@ -253,6 +255,7 @@ classDiagram
         createDeviceCapture(isScreencast)
         createFileCapture(path)
         toggleVirtualBackground()
+        toggleRemoteAudio()
         onDestroy()
     }
     class SignalingHandler {
@@ -330,6 +333,7 @@ classDiagram
         RTCFrameCryptorKeyProvider
         frameCryptors
         setVirtualBackground()
+        setRemoteAudioEnabled()
     }
     class VirtualBackgroundProcessor {
         RTCVideoCapturerDelegate proxy
@@ -363,6 +367,15 @@ flowchart LR
     FB --> VS["RTCVideoSource"]
     SH -. "Darwin notifications<br/>broadcastStarted / broadcastStopped" .-> APP["WebRTCClient"]
 ```
+
+Each frame is sent as an HTTP-style message: `Content-Length`, `Buffer-Width`, `Buffer-Height` and `Buffer-Orientation` headers, then a JPEG body. On the app side, `FlutterSocketConnection` accepts the extension's connection and reads it on its own thread, and `FlutterSocketConnectionFrameReader` asks the stream for exactly the bytes still missing from the current frame, decodes the JPEG into a `CVPixelBuffer` and hands it to `RTCVideoSource`. A frame must be completed before the next read: a read of 0 bytes is reported as end of stream, the app closes the socket and the extension stops with "Screen sharing stopped".
+
+The broadcast keeps going when the user leaves the app, which needs two things:
+
+- **The app process stays alive.** `UIBackgroundModes` has `audio` and `voip`, and the call keeps an active `playAndRecord` audio session, so iOS does not suspend the app (and its socket server) in the background.
+- **The video encoder keeps working.** H264 is encoded by the VideoToolbox hardware encoder, which iOS invalidates while the app is in the background; every frame then fails and the remote side sees a frozen picture. So iOS always puts **VP8** (software) first in its codec preferences, with or without E2EE.
+
+The remote peer's audio can be muted locally ("Mute Peer"): `setRemoteAudioEnabled()` disables the audio track of every receiver, including receivers added later by a renegotiation. Nothing is sent to the remote peer. Android does the same in `WebRtcPeer` with the tracks from `onAddTrack`, and web does it with `track.enabled` on the remote stream.
 
 The signaling server address is `SERVER_URL` in `ios/WebRTCDemo/CallViewController.swift`.
 
@@ -462,7 +475,7 @@ Only the raw key material travels through signaling (as a Socket.IO binary attac
 
 ### 9.4 Codec negotiation
 
-When E2EE is on, every platform puts **VP8 first** in the video codec preferences (`setCodecPreferences`) before creating the offer or the answer, so both sides use the codec whose header layout is most robust across implementations. The web client also parses the negotiated SDP (`parseCodecMap`) to map RTP payload types to codecs, because `getMetadata().mimeType` is not available in every browser.
+When E2EE is on, every platform puts **VP8 first** in the video codec preferences (`setCodecPreferences`) before creating the offer or the answer, so both sides use the codec whose header layout is most robust across implementations. iOS does this on every call, see [section 7](#7-ios-client). The web client also parses the negotiated SDP (`parseCodecMap`) to map RTP payload types to codecs, because `getMetadata().mimeType` is not available in every browser.
 
 ### 9.5 Cryptor lifecycle
 
@@ -587,4 +600,4 @@ ios:               cd ios && pod install --repo-update, then open WebRTCDemo.xcw
 - **Signaling is not secured.** Plain HTTP/WebSocket, no authentication; anyone with the room id can join.
 - **E2EE key goes through the signaling server in plain form.** Fine for a demo; a real app should use a key agreement (e.g. ECDH) or a passphrase shared out of band.
 - **E2EE is chosen in the lobby** and cannot be toggled during a call; both peers must choose the same setting.
-- **iOS screen sharing** stops when the app goes to the background (see `ios/IMPORTANT_SCREEN_SHARING_LIMITATIONS.md`).
+- **iOS always sends VP8.** It is encoded in software, so it uses more CPU and battery than hardware H264; this is what keeps screen sharing alive in the background.

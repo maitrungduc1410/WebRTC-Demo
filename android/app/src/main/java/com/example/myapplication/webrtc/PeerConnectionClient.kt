@@ -38,6 +38,9 @@ class PeerConnectionClient(
     private lateinit var signalingHandler: SignalingHandler
     private var peer: WebRtcPeer? = null
     private var useFrontCamera = true
+    // Written on the UI thread, read when a peer is created from a socket callback
+    @Volatile
+    private var remoteAudioEnabled = true
     private var e2ee: E2eeManager? = null
 
     // Virtual background: segmenter/bitmap live for the whole call, the processor per camera VideoSource.
@@ -115,7 +118,8 @@ class PeerConnectionClient(
             pcConstraints = pcConstraints,
             listener = listener,
             signalingHandler = signalingHandler,
-            e2ee = e2ee
+            e2ee = e2ee,
+            remoteAudioEnabled = remoteAudioEnabled
         )
         return peer!!
     }
@@ -147,6 +151,11 @@ class PeerConnectionClient(
 
     fun toggleVideo(enable: Boolean) {
         localStream?.videoTracks?.firstOrNull()?.setEnabled(enable)
+    }
+
+    fun toggleRemoteAudio(enable: Boolean) {
+        remoteAudioEnabled = enable
+        peer?.setRemoteAudioEnabled(enable)
     }
 
     fun createDataChannel(dataChannelName: String) {

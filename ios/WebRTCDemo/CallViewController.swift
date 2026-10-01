@@ -28,6 +28,7 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
     private var videoEnabled = true
     private var audioEnabled = true
     private var isSpeakerOn = false
+    private var remoteAudioEnabled = true
     private var dataChannelReady = false
     private var isScreenSharing = false
     private var isVideoFileSharing = false
@@ -73,6 +74,10 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
     private let speakerContainer = UIView()
     private let speakerButton = UIButton(type: .system)
     private let speakerLabel = UILabel()
+    
+    private let remoteAudioContainer = UIView()
+    private let remoteAudioButton = UIButton(type: .system)
+    private let remoteAudioLabel = UILabel()
     
     private let backgroundContainer = UIView()
     private let backgroundButton = UIButton(type: .system)
@@ -170,6 +175,7 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
                 customFrameCapturer: self.useCustomCapturer,
                 enableE2EE: self.enableE2EE
             )
+            self.webRTCClient.setRemoteAudioEnabled(self.remoteAudioEnabled)
             self.setupVideoViews()
             self.backgroundButton.isEnabled = self.webRTCClient.isVirtualBackgroundAvailable
         }
@@ -414,10 +420,11 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
         bottomControlsContainer.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bottomControlsContainer)
         
-        // Secondary controls stack (Chat, Share, Speaker, Background)
+        // Secondary controls stack (Chat, Share, Speaker, Mute Peer, Background)
         secondaryControlsStack.axis = .horizontal
         secondaryControlsStack.distribution = .equalCentering
-        secondaryControlsStack.spacing = 32
+        // Five 56pt buttons must fit the 343pt-wide controls area of a 375pt screen
+        secondaryControlsStack.spacing = 12
         secondaryControlsStack.translatesAutoresizingMaskIntoConstraints = false
         bottomControlsContainer.addSubview(secondaryControlsStack)
         
@@ -454,6 +461,17 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
             action: #selector(speakerButtonTapped)
         )
         secondaryControlsStack.addArrangedSubview(speakerContainer)
+        
+        // Mute remote audio
+        setupSecondaryControl(
+            container: remoteAudioContainer,
+            button: remoteAudioButton,
+            label: remoteAudioLabel,
+            icon: "speaker.wave.2.fill",
+            title: "Mute Peer",
+            action: #selector(remoteAudioButtonTapped)
+        )
+        secondaryControlsStack.addArrangedSubview(remoteAudioContainer)
         
         // Virtual background
         setupSecondaryControl(
@@ -865,6 +883,15 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
         } catch {
             print("Failed to toggle speaker: \(error)")
         }
+    }
+    
+    @objc private func remoteAudioButtonTapped() {
+        remoteAudioEnabled.toggle()
+        webRTCClient?.setRemoteAudioEnabled(remoteAudioEnabled)
+        
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
+        remoteAudioButton.setImage(UIImage(systemName: remoteAudioEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill", withConfiguration: config), for: .normal)
+        showToast(message: remoteAudioEnabled ? "Remote audio unmuted" : "Remote audio muted")
     }
     
     @objc private func backgroundButtonTapped() {

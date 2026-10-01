@@ -16,10 +16,10 @@
 | Front/back camera             | ❌       | ✅   | ✅       |
 | Mute local video              | ✅       | ✅   | ✅       |
 | Mute local audio              | ✅       | ✅   | ✅       |
-| Mute remote video             | ✅       | ❌   | ❌       |
+| Mute remote audio             | ✅       | ✅   | ✅       |
 | Device speaker                | ❌       | ✅   | ✅       |
 | Data channel                  | ✅       | ✅   | ✅       |
-| Share screen                  | ✅       | ❌   | ✅       |
+| Share screen                  | ✅       | ✅   | ✅       |
 | Share video from Photos/Files | ✅       | ✅   | ✅       |
 | Virtual background            | ✅       | ✅   | ✅       |
 | End to end encryption         | ✅       | ✅   | ✅       |
@@ -102,9 +102,13 @@ Web, Android and iOS can talk to each other with E2EE on. Android/iOS use the `F
 
 ## Screen sharing on iOS
 
-Learn from [Flutter WebRTC Demo](https://github.com/flutter-webrtc/flutter-webrtc/wiki/iOS-Screen-Sharing), we can share screen on iOS using Broadcast Extension, but currently can only share screen from within our app, if we back to home screen, screen sharing will stop.
+Learn from [Flutter WebRTC Demo](https://github.com/flutter-webrtc/flutter-webrtc/wiki/iOS-Screen-Sharing), we share screen on iOS using a Broadcast Extension. It works both inside the app and after going back to the home screen or another app.
 
-There's no solution for now, if you have better idea, file an issue or PR is welcome!
+- H264 is encoded by the VideoToolbox hardware encoder, which iOS invalidates while the app is in the background, so the remote side would see a frozen picture. iOS therefore always negotiates **VP8** (software encoded), with or without E2EE. The cost is more CPU and battery than hardware H264.
+- The `audio` and `voip` background modes keep the app (and the socket that receives frames from the extension) alive while it is in the background.
+- To stop sharing, tap Share again in the app or stop the broadcast from Control Center.
+- The app and the extension must share the same App Group (`group.com.ducmai.webrtc.broadcast` in both `.entitlements` files, `RTCAppGroupIdentifier` in `Info.plist` and `SampleHandler.swift`). If you change the team or bundle id, update all of them, and `RTCScreenSharingExtension` / `preferredExtension` with the new extension bundle id.
+- The app side of the socket (`FlutterSocketConnection*`) is copied from the [flutter-webrtc plugin](https://github.com/flutter-webrtc/flutter-webrtc/tree/main/ios/flutter_webrtc/Sources/flutter_webrtc/Broadcast); the LiveKit example only contains the extension side. Keep its frame reading logic as is: if the reader ever asks the stream for 0 bytes, iOS reports end of stream and the broadcast stops right after the first frame.
 
 ## More than 2 peers in a room
 

@@ -127,7 +127,7 @@ App.vue
    **E2EE Process**:
    - The peer already in the room generates the key material and sends it via `send encryption key` before the offer
    - The joining peer sets the key when it receives `receive encryption key`
-   - Every platform puts VP8 first in the video codec preferences when E2EE is on
+   - Every platform puts VP8 first in the video codec preferences when E2EE is on; iOS does it on every call so screen sharing keeps encoding in the background
    - Frames that cannot be encrypted/decrypted (no key yet, bad frame) are dropped, never forwarded in plain form
 
    **Files**:
@@ -157,11 +157,17 @@ WebRTCDemo (Main App)
 ├── ViewController.swift (Main UI)
 ├── CallViewController.swift (Call management)
 ├── PeerConnectionClient.swift (WebRTC logic)
-├── CameraSession.swift (Camera management)
-└── RTCCustomFrameCapturer.swift (Custom video capture)
+├── VirtualBackgroundProcessor.swift (Vision + Core Image virtual background)
+├── RTCCustomFrameCapturer.swift (Custom video capture)
+├── RTCFileVideoCapturer+URL.swift (Video file capture)
+├── FlutterBroadcastScreenCapturer.h/m (Screen capturer fed by the extension)
+├── FlutterSocketConnection.h/m (Unix socket server, from flutter-webrtc)
+└── FlutterSocketConnectionFrameReader.h/m (Frame decoding, from flutter-webrtc)
 
 WebRTCDemoScreenBroadcast (Broadcast Extension)
-└── SampleHandler.swift (Screen capture handler)
+├── SampleHandler.swift (Screen capture handler)
+├── SampleUploader.swift (JPEG encoding + framing)
+└── SocketConnection.swift (Unix socket client)
 
 WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
 └── BroadcastSetupViewController.swift
@@ -202,6 +208,7 @@ WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
 - Broadcast Extension captures and encodes frames to JPEG
 - Unix domain socket (via App Group) transfers frames to main app
 - `FlutterBroadcastScreenCapturer` feeds frames into WebRTC
+- The app-side socket and frame reader are copied from the flutter-webrtc plugin; keep their framing logic (a 0-byte read is end of stream and stops the broadcast)
 - Darwin notifications coordinate lifecycle between processes
 - Automatic camera ↔ screen track switching
 
@@ -212,7 +219,7 @@ WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
 #### 4. Android Client (`android/`)
 
 **Technology Stack:**
-- Kotlin/Java (native Android)
+- Kotlin (native Android)
 - WebRTC framework for Android
 - Gradle build system
 
@@ -515,6 +522,6 @@ This project is intended for **educational and demonstration purposes** to showc
 
 ---
 
-**Last Updated**: January 2026  
-**WebRTC Version**: M125  
+**Last Updated**: October 2026  
+**WebRTC Version**: M150 (webrtc-sdk `150.7871.01`)  
 **Maintainer**: Project repository maintainers

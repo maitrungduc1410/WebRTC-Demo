@@ -86,10 +86,10 @@ class E2eeManager(private val factory: PeerConnectionFactory) {
     }
 
     private fun configure(cryptor: FrameCryptor): FrameCryptor {
-        cryptor.setKeyIndex(KEY_INDEX)
+        cryptor.keyIndex = KEY_INDEX
         // M150 forwards plaintext while a cryptor is disabled, so enable it immediately.
         // Until a key is set, frames are dropped on the missing-key path instead.
-        cryptor.setEnabled(true)
+        cryptor.isEnabled = true
         cryptor.setObserver(observer)
         return cryptor
     }

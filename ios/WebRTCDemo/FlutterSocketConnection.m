@@ -3,135 +3,138 @@
 //  WebRTCDemo
 //
 //  Socket connection server (main app side) for receiving screen frames from broadcast extension
-//  Copy from: https://github.com/livekit/client-sdk-flutter/tree/main/example/ios/LiveKit%20Broadcast%20Extension
+//  Copy from: https://github.com/flutter-webrtc/flutter-webrtc/tree/main/ios/flutter_webrtc/Sources/flutter_webrtc/Broadcast
 
-#import "FlutterSocketConnection.h"
-#import <os/log.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
-static const os_log_t kSocketLog = OS_LOG_DEFAULT;
+#import "FlutterSocketConnection.h"
 
 @interface FlutterSocketConnection ()
 
+@property(nonatomic, assign) int serverSocket;
+@property(nonatomic, strong) dispatch_source_t listeningSource;
+
+@property(nonatomic, strong) NSThread* networkThread;
+
 @property(nonatomic, strong) NSInputStream* inputStream;
 @property(nonatomic, strong) NSOutputStream* outputStream;
-@property(nonatomic, strong) NSThread* networkThread;
-@property(nonatomic, assign) int serverSocket;
 
 @end
 
 @implementation FlutterSocketConnection
 
-- (instancetype)initWithFilePath:(NSString*)filePath {
+- (instancetype)initWithFilePath:(nonnull NSString*)filePath {
   self = [super init];
-  if (self) {
-    _serverSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (_serverSocket == -1) {
-      os_log_error(kSocketLog, "Failed to create server socket");
-      return nil;
-    }
 
-    if (![self setupSocketWithFileAtPath:filePath]) {
-      close(_serverSocket);
-      return nil;
-    }
+  [self setupNetworkThread];
 
-    if (listen(_serverSocket, 1) < 0) {
-      os_log_error(kSocketLog, "Failed to listen on socket");
-      close(_serverSocket);
-      return nil;
-    }
+  self.serverSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (self.serverSocket < 0) {
+    NSLog(@"failure creating socket");
+    return nil;
+  }
 
-    [self setupNetworkThread];
+  if (![self setupSocketWithFileAtPath:filePath]) {
+    close(self.serverSocket);
+    return nil;
   }
 
   return self;
 }
 
-- (void)dealloc {
-  [self close];
-}
-
 - (void)openWithStreamDelegate:(id<NSStreamDelegate>)streamDelegate {
-  __weak __typeof__(self) weakSelf = self;
-  
-  [self.networkThread start];
-  
-  [NSThread detachNewThreadSelector:@selector(acceptConnectionWithDelegate:)
-                           toTarget:self
-                         withObject:streamDelegate];
-}
-
-- (void)acceptConnectionWithDelegate:(id<NSStreamDelegate>)streamDelegate {
-  struct sockaddr_un clientAddr;
-  socklen_t clientAddrLen = sizeof(clientAddr);
-  
-  int clientSocket = accept(self.serverSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
-  if (clientSocket < 0) {
-    os_log_error(kSocketLog, "Failed to accept connection");
+  int status = listen(self.serverSocket, 10);
+  if (status < 0) {
+    NSLog(@"failure: socket listening");
     return;
   }
 
-  os_log_info(kSocketLog, "Client connected");
-
-  CFReadStreamRef readStream;
-  CFWriteStreamRef writeStream;
-  CFStreamCreatePairWithSocket(kCFAllocatorDefault, clientSocket, &readStream, &writeStream);
-
-  self.inputStream = (__bridge_transfer NSInputStream*)readStream;
-  self.outputStream = (__bridge_transfer NSOutputStream*)writeStream;
-
-  [self.inputStream setProperty:@YES forKey:(__bridge NSString*)kCFStreamPropertyShouldCloseNativeSocket];
-  [self.outputStream setProperty:@YES forKey:(__bridge NSString*)kCFStreamPropertyShouldCloseNativeSocket];
-
-  self.inputStream.delegate = streamDelegate;
-  self.outputStream.delegate = streamDelegate;
-
-  [self scheduleStreams];
-  [self.inputStream open];
-  [self.outputStream open];
-
-  if (self.networkThread && !self.networkThread.isExecuting) {
-    [self.networkThread start];
-  }
-
-  @autoreleasepool {
-    while (self.inputStream && ![NSThread currentThread].isCancelled) {
-      if (![NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode
-                                  beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.5]]) {
-        break;
-      }
+  dispatch_source_t listeningSource =
+      dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, self.serverSocket, 0, NULL);
+  dispatch_source_set_event_handler(listeningSource, ^{
+    int clientSocket = accept(self.serverSocket, NULL, NULL);
+    if (clientSocket < 0) {
+      NSLog(@"failure accepting connection");
+      return;
     }
-  }
+
+    // Only one broadcast extension feeds a capturer, and an NSThread cannot be started twice
+    if (self.networkThread.isExecuting || self.networkThread.isFinished) {
+      NSLog(@"rejecting extra connection");
+      close(clientSocket);
+      return;
+    }
+
+    NSLog(@"client connected");
+
+    CFReadStreamRef readStream;
+    CFWriteStreamRef writeStream;
+
+    CFStreamCreatePairWithSocket(kCFAllocatorDefault, clientSocket, &readStream, &writeStream);
+
+    self.inputStream = (__bridge_transfer NSInputStream*)readStream;
+    self.inputStream.delegate = streamDelegate;
+    [self.inputStream setProperty:@YES
+                           forKey:(__bridge NSString*)kCFStreamPropertyShouldCloseNativeSocket];
+
+    self.outputStream = (__bridge_transfer NSOutputStream*)writeStream;
+    [self.outputStream setProperty:@YES
+                            forKey:(__bridge NSString*)kCFStreamPropertyShouldCloseNativeSocket];
+
+    [self.networkThread start];
+    [self performSelector:@selector(scheduleStreams)
+                 onThread:self.networkThread
+               withObject:nil
+            waitUntilDone:true];
+
+    [self.inputStream open];
+    [self.outputStream open];
+  });
+
+  self.listeningSource = listeningSource;
+  dispatch_resume(listeningSource);
 }
 
+// Called from the network thread (end of stream) and from WebRTCClient, so it must be idempotent
 - (void)close {
-  [self.networkThread cancel];
-  [self unscheduleStreams];
-  
-  [self.inputStream close];
-  [self.outputStream close];
-  
+  if ([self.networkThread isExecuting]) {
+    [self performSelector:@selector(unscheduleStreams)
+                 onThread:self.networkThread
+               withObject:nil
+            waitUntilDone:true];
+  }
+
   self.inputStream.delegate = nil;
   self.outputStream.delegate = nil;
-  
+
+  [self.inputStream close];
+  [self.outputStream close];
+
   self.inputStream = nil;
   self.outputStream = nil;
 
-  if (self.serverSocket != -1) {
+  [self.networkThread cancel];
+
+  if (self.listeningSource) {
+    dispatch_source_cancel(self.listeningSource);
+    self.listeningSource = nil;
+  }
+  if (self.serverSocket >= 0) {
     close(self.serverSocket);
     self.serverSocket = -1;
   }
 }
 
+// MARK: - Private Methods
+
 - (void)setupNetworkThread {
   self.networkThread = [[NSThread alloc] initWithBlock:^{
-    @autoreleasepool {
-      while (![NSThread currentThread].isCancelled) {
+    do {
+      @autoreleasepool {
         [[NSRunLoop currentRunLoop] run];
       }
-    }
+    } while (![NSThread currentThread].isCancelled);
   }];
   self.networkThread.qualityOfService = NSQualityOfServiceUserInitiated;
 }
@@ -142,8 +145,8 @@ static const os_log_t kSocketLog = OS_LOG_DEFAULT;
   addr.sun_family = AF_UNIX;
 
   if (filePath.length > sizeof(addr.sun_path)) {
-    os_log_error(kSocketLog, "File path too long");
-    return NO;
+    NSLog(@"failure: path too long");
+    return false;
   }
 
   unlink(filePath.UTF8String);
@@ -151,11 +154,11 @@ static const os_log_t kSocketLog = OS_LOG_DEFAULT;
 
   int status = bind(self.serverSocket, (struct sockaddr*)&addr, sizeof(addr));
   if (status < 0) {
-    os_log_error(kSocketLog, "Failed to bind socket");
-    return NO;
+    NSLog(@"failure: socket binding");
+    return false;
   }
 
-  return YES;
+  return true;
 }
 
 - (void)scheduleStreams {

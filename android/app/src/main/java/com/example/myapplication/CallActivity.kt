@@ -66,6 +66,7 @@ class CallActivity : AppCompatActivity(), RtcListener {
     private var videoEnabled = true
     private var audioEnabled = true
     private var isSpeakerOn = false
+    private var remoteAudioEnabled = true
     private var dataChannelReady = false
     private var isScreenSharing = false
     private var isAppInForeground = true
@@ -347,6 +348,17 @@ class CallActivity : AppCompatActivity(), RtcListener {
             btnSpeaker.setImageResource(
                 if (isSpeakerOn) R.drawable.speaker_slash_fill else R.drawable.speaker_wave_3_fill
             )
+        }
+
+        // Mute remote audio (local playout only)
+        val btnRemoteAudio = findViewById<ImageButton>(R.id.btn_remote_audio)
+        btnRemoteAudio.setOnClickListener {
+            remoteAudioEnabled = !remoteAudioEnabled
+            peerConnectionClient?.toggleRemoteAudio(remoteAudioEnabled)
+            btnRemoteAudio.setImageResource(
+                if (remoteAudioEnabled) R.drawable.volume_up else R.drawable.volume_off
+            )
+            onStatusChanged(if (remoteAudioEnabled) "Remote audio unmuted" else "Remote audio muted")
         }
 
         val hangUp = findViewById<ImageButton>(R.id.hang_up)
@@ -758,7 +770,6 @@ class CallActivity : AppCompatActivity(), RtcListener {
                 // No special cleanup needed for file sharing
             }
             SharingType.NONE -> return
-            else -> {}
         }
         
         // Reset to camera capture
