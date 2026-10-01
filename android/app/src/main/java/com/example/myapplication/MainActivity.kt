@@ -8,6 +8,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import kotlin.random.Random
 import androidx.core.graphics.toColorInt
 
@@ -15,6 +16,7 @@ class MainActivity : AppCompatActivity() {
     
     companion object {
         const val EXTRA_MESSAGE = "com.example.webrtcdemoandroid.ROOM_ID"
+        const val EXTRA_E2EE = "com.example.webrtcdemoandroid.E2EE"
     }
     
     private var roomId: String = ""
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity() {
         val btnJoin = findViewById<Button>(R.id.btnJoin)
         val btnRandom = findViewById<Button>(R.id.btnRandom)
         val roomIDText = findViewById<EditText>(R.id.roomIDText)
+        val switchE2ee = findViewById<SwitchCompat>(R.id.switchE2ee)
 
         roomId = generateRandomString(100000, 999999)
         roomIDText.setText(roomId)
@@ -43,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         btnJoin.setOnClickListener {
             val intent = Intent(this, CallActivity::class.java).apply {
                 putExtra(EXTRA_MESSAGE, roomId)
+                putExtra(EXTRA_E2EE, switchE2ee.isChecked)
             }
             startActivity(intent)
         }

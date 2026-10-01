@@ -91,6 +91,8 @@ class CallActivity : AppCompatActivity(), RtcListener {
     private lateinit var bottomSheetAdapter: MessageAdapter
     private var messageBottomSheet: BottomSheetDialog? = null
     private lateinit var btnChat: ImageButton
+    private var e2eeEnabled = false
+    private var backgroundEnabled = false
 
     // Activity Result API for screen capture
     private val screenCaptureLauncher = registerForActivityResult(
@@ -209,13 +211,14 @@ class CallActivity : AppCompatActivity(), RtcListener {
         }
 
         roomId = intent.getStringExtra(MainActivity.EXTRA_MESSAGE) ?: ""
+        e2eeEnabled = intent.getBooleanExtra(MainActivity.EXTRA_E2EE, false)
 
         // Initialize TextViews
         val roomIdText = findViewById<TextView>(R.id.room_id)
         participantNameText = findViewById(R.id.participant_name)
 
         // Set room ID
-        roomIdText.text = "Room: $roomId"
+        roomIdText.text = if (e2eeEnabled) "Room: $roomId · E2EE" else "Room: $roomId"
 
         checkPermissions()
         init()
@@ -240,7 +243,7 @@ class CallActivity : AppCompatActivity(), RtcListener {
     }
 
     private fun init() {
-        peerConnectionClient = PeerConnectionClient(this, roomId, this, mSocketAddress, eglBase)
+        peerConnectionClient = PeerConnectionClient(this, roomId, this, mSocketAddress, eglBase, e2eeEnabled)
         peerConnectionClientRef = WeakReference(peerConnectionClient)
 
         if (PermissionChecker.hasPermissions(this, RequiredPermissions)) {
@@ -349,6 +352,20 @@ class CallActivity : AppCompatActivity(), RtcListener {
         val hangUp = findViewById<ImageButton>(R.id.hang_up)
         hangUp.setOnClickListener { 
             onBackPressedDispatcher.onBackPressed()
+        }
+
+        // Virtual background (camera only; the state is kept while sharing and applies when back on camera)
+        val btnBackground = findViewById<ImageButton>(R.id.btn_background)
+        btnBackground.setOnClickListener {
+            backgroundEnabled = !backgroundEnabled
+            peerConnectionClient?.toggleVirtualBackground(backgroundEnabled)
+            if (backgroundEnabled) {
+                btnBackground.setColorFilter(android.graphics.Color.GREEN)
+                onStatusChanged("Virtual background on")
+            } else {
+                btnBackground.clearColorFilter()
+                onStatusChanged("Virtual background off")
+            }
         }
 
         // Setup messaging

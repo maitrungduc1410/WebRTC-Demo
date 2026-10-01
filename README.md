@@ -21,8 +21,12 @@
 | Data channel                  | ✅       | ✅   | ✅       |
 | Share screen                  | ✅       | ❌   | ✅       |
 | Share video from Photos/Files | ✅       | ✅   | ✅       |
-| Virtual background            | ✅       | ❌   | ❌       |
-| End to end encryption         | ✅       | ❌   | ❌       |
+| Virtual background            | ✅       | ✅   | ✅       |
+| End to end encryption         | ✅       | ✅   | ✅       |
+
+Native clients use [webrtc-sdk](https://github.com/webrtc-sdk) `150.7871.01` (Android `io.github.webrtc-sdk:android`, iOS pod `WebRTC-SDK`).
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the three clients work, with diagrams.
 
 
 # Disclaimer
@@ -85,7 +89,16 @@ Solution: Update your Xcode project build option ENABLE_USER_SCRIPT_SANDBOXING t
 
 ## End to end encryption on WebRTC
 
-Only support Web for now. Eventhough the owner of webrtc sdk has implemented E2EE for Android/iOS ([See here](https://github.com/webrtc-sdk/webrtc/commit/3a2c008529a15fecde5f979a6ebb75c05463d45e)), but it's pretty different from Web implementation, so need more work to implement cross platform E2EE.
+Web, Android and iOS can talk to each other with E2EE on. Android/iOS use the `FrameCryptor` built into webrtc-sdk, and the web client (`web/src/e2ee.ts`, Insertable Streams in a worker) produces exactly the same frame format:
+
+```
+[unencrypted header][AES-128-GCM ciphertext + 16B tag][IV 12B][IV length = 12][key index]
+```
+
+- The unencrypted header is the VP8 payload header (10 bytes for key frames, 3 for delta frames), the Opus TOC byte (1 byte), or H264 data up to the first slice NAL header + 1 byte. It is authenticated as AES-GCM additional data. For H264 the rest of the frame is RBSP-escaped.
+- The AES key is derived with `PBKDF2-HMAC-SHA256(material, "LKFrameEncryptionKey", 100000)`, 128 bits. Key provider options are the same on every platform: shared key, key index 0, no ratchet, no magic bytes.
+- The peer already in the room generates 32 random bytes of key material and sends them with `send encryption key` before the offer. When E2EE is on, every platform prefers VP8.
+- Both peers must enable E2EE. The key goes through the signaling server in plain form, which is fine for a demo; a real app should use a key agreement (e.g. ECDH) or a passphrase shared out of band.
 
 ## Screen sharing on iOS
 
@@ -99,4 +112,8 @@ For demo purpose, we only support 1:1 call now, but you can extend it to support
 
 ## Virtual background on mobile
 
-Currently we only support virtual background on Web using MediaPipe. Though MediaPipe also supports Android/iOS, but integrating it with WebRTC native sdk is not straight forward. We are working on it, if you have good idea or solution, please file an issue or PR!
+- Web: MediaPipe `ImageSegmenter` (`selfie_segmenter`) on a canvas.
+- Android: MediaPipe `tasks-vision` (`selfie_segmenter`, confidence mask) on its own thread, fed with a small upright copy of the camera frame. The person and the background image are composited on the GPU with a GLES shader over the camera texture, so no full-resolution frame is copied to the CPU.
+- iOS: Apple Vision `VNGeneratePersonSegmentationRequest` and Core Image `CIBlendWithMask` on a Metal `CIContext`, inserted as a proxy between `RTCCameraVideoCapturer` and `RTCVideoSource`.
+
+Virtual background only applies to the camera, not to screen share or file share.

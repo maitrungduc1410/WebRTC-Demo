@@ -65,7 +65,7 @@ The signaling server facilitates the initial peer discovery and exchange of conn
 - `offer` - Send WebRTC offer to peer
 - `answer` - Send WebRTC answer to peer
 - `new ice candidate` - Exchange ICE candidates
-- `receive encryption key` - Exchange E2EE keys (web only)
+- `receive encryption key` - Exchange E2EE keys (web, Android, iOS)
 - `send data channel message` - Relay data channel messages
 - `leave room` - Leave the current room
 
@@ -112,49 +112,29 @@ App.vue
    - Chat interface for peer-to-peer communication
 
 4. **End-to-End Encryption (E2EE)**
-   - **Current Status**: Only supported for Web-Web communication
-   - **Algorithm**: AES-GCM with 256-bit keys
-   - **Implementation Options**:
-     - Main thread encryption/decryption
-     - Web Worker-based encryption (offload processing)
-   
-   **E2EE Architecture**:
+   - **Current Status**: Web, Android and iOS interoperate
+   - **Algorithm**: AES-128-GCM, key derived with PBKDF2-HMAC-SHA256 (salt `LKFrameEncryptionKey`, 100000 iterations) from 32 bytes of shared key material
+   - **Native**: webrtc-sdk `FrameCryptor` (shared key mode, key index 0, no ratchet, no magic bytes)
+   - **Web**: Insertable Streams (`createEncodedStreams`, or `RTCRtpScriptTransform` where available), main thread or Web Worker
+
+   **Frame format** (same on every platform):
    ```
-   Sender                           Receiver
-   ──────                           ────────
-   Media Frame
-      │
-      ▼
-   Generate IV (12 bytes)
-      │
-      ▼
-   AES-GCM Encrypt
-      │
-      ▼
-   Append IV to encrypted data
-      │
-      ▼
-   Send via WebRTC ──────────►  Extract IV
-                                    │
-                                    ▼
-                                AES-GCM Decrypt
-                                    │
-                                    ▼
-                                Render Frame
+   [unencrypted header][AES-GCM ciphertext + 16B tag][IV 12B][IV length = 12][key index]
    ```
+   - Unencrypted header: VP8 10 bytes (key frame) / 3 bytes (delta), Opus 1 byte, H264 up to the first slice NAL header + 1
+   - The header is the AES-GCM additional data; for H264 the rest is RBSP-escaped
 
    **E2EE Process**:
-   - Initiator generates AES-GCM encryption key
-   - Key is exported and sent to remote peer via signaling server
-   - Both peers use Insertable Streams API to:
-     - Encrypt outgoing media frames
-     - Decrypt incoming media frames
-   - Each frame gets unique IV (Initialization Vector)
-   - **Debug Mode**: `shouldSendEncryptionKey=false` shows raw encrypted video
+   - The peer already in the room generates the key material and sends it via `send encryption key` before the offer
+   - The joining peer sets the key when it receives `receive encryption key`
+   - Every platform puts VP8 first in the video codec preferences when E2EE is on
+   - Frames that cannot be encrypted/decrypted (no key yet, bad frame) are dropped, never forwarded in plain form
 
    **Files**:
-   - `e2ee.ts` - Encryption/decryption stream transformers
-   - `encryptionWorker.ts` - Web Worker for offloading crypto operations
+   - `web/src/e2ee.ts` - Frame format, key derivation and stream transformers
+   - `web/src/encryptionWorker.ts` - Web Worker for offloading crypto operations
+   - `android/.../webrtc/E2eeManager.kt` - Key provider and FrameCryptor creation
+   - `ios/WebRTCDemo/PeerConnectionClient.swift` - Key provider and RTCFrameCryptor lifecycle
 
 5. **Media Streams API Integration**
    - `getUserMedia()` for camera/microphone access
@@ -365,23 +345,21 @@ The project uses Google's public STUN server:
 The E2EE implementation uses the **Insertable Streams API** (also known as WebRTC Encoded Transform):
 
 ```typescript
+const options = { kind, getKey: () => encryptionKey, getCodecMap: () => codecMap };
+
 // For sender (encoding)
 const senderStreams = sender.createEncodedStreams();
-encryptStream(encryptionKey, 
-              senderStreams.readable, 
-              senderStreams.writable);
+encryptStream(options, senderStreams.readable, senderStreams.writable);
 
 // For receiver (decoding)
 const receiverStreams = receiver.createEncodedStreams();
-decryptStream(encryptionKey, 
-              receiverStreams.readable, 
-              receiverStreams.writable);
+decryptStream(options, receiverStreams.readable, receiverStreams.writable);
 ```
 
 **Transform Pipeline**:
 - Intercept encoded video/audio frames
-- Apply AES-GCM encryption/decryption
-- IV (Initialization Vector) is prepended to each frame
+- Apply AES-GCM encryption/decryption in the native FrameCryptor format
+- IV and trailer are appended to each frame
 - Frames remain opaque to intermediaries
 
 **Worker Architecture** (optional):
@@ -429,7 +407,8 @@ Rooms are temporary and in-memory:
 | Speaker/Microphone Toggle | ✅  | ✅      | ✅  |
 | Screen Sharing            | ✅  | ✅      | ✅  |
 | Data Channel Messaging    | ✅  | ✅      | ✅  |
-| End-to-End Encryption     | ✅  | 🚧      | 🚧  |
+| End-to-End Encryption     | ✅  | ✅      | ✅  |
+| Virtual Background        | ✅  | ✅      | ✅  |
 | Stream Video File         | 🚧  | 🚧      | 🚧  |
 
 ✅ = Supported | ❌ = Not Supported | 🚧 = In Progress
@@ -455,9 +434,8 @@ Rooms are temporary and in-memory:
 
 ## Future Enhancements
 
-1. **E2EE for Native Platforms**
-   - Android: Implement frame encryption using native WebRTC frame cryptor
-   - iOS: Similar native implementation
+1. **E2EE Key Agreement**
+   - Replace sending raw key material through the signaling server with ECDH or a passphrase
 
 2. **Stream Video Files**
    - Play video files to remote peer
@@ -478,14 +456,14 @@ Rooms are temporary and in-memory:
 6. **Advanced Features**
    - Simulcast for adaptive bitrate
    - SVC (Scalable Video Coding)
-   - Background blur/virtual backgrounds
+   - Background blur
    - Noise suppression
 
 ## Security Considerations
 
 ### Current Implementation
 
-- **E2EE**: Only web-to-web, prevents MITM attacks on media
+- **E2EE**: Web, Android and iOS; the key material goes through the signaling server in plain form
 - **Signaling**: Unencrypted WebSocket (not production-ready)
 - **Authentication**: No user authentication implemented
 - **Room Access**: Anyone with room ID can join
@@ -496,7 +474,7 @@ Rooms are temporary and in-memory:
 2. **Implement authentication** (JWT, OAuth)
 3. **Room access control** with passwords or invitations
 4. **HTTPS** for web client
-5. **Complete E2EE** across all platforms
+5. **E2EE key agreement** instead of sending the key through signaling
 6. **Validate and sanitize** all inputs
 7. **Rate limiting** on signaling server
 

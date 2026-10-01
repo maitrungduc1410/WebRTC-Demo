@@ -2,10 +2,15 @@ package com.example.myapplication.webrtc
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.hardware.camera2.CameraManager
 import android.media.projection.MediaProjection
 import android.util.Log
+import com.example.myapplication.R
 import com.example.myapplication.Utils
+import com.example.myapplication.webrtc.vbg.SelfieSegmenter
+import com.example.myapplication.webrtc.vbg.VirtualBackgroundProcessor
 import io.socket.client.IO
 import io.socket.client.Socket
 import org.webrtc.*
@@ -19,7 +24,8 @@ class PeerConnectionClient(
     private val roomId: String,
     private val listener: RtcListener,
     host: String,
-    private val rootEglBase: EglBase
+    private val rootEglBase: EglBase,
+    private val e2eeEnabled: Boolean = false
 ) {
     private var factory: PeerConnectionFactory? = null
     private val pcConstraints = MediaConstraints()
@@ -32,6 +38,13 @@ class PeerConnectionClient(
     private lateinit var signalingHandler: SignalingHandler
     private var peer: WebRtcPeer? = null
     private var useFrontCamera = true
+    private var e2ee: E2eeManager? = null
+
+    // Virtual background: segmenter/bitmap live for the whole call, the processor per camera VideoSource.
+    private var virtualBackgroundEnabled = false
+    private var segmenter: SelfieSegmenter? = null
+    private var backgroundBitmap: Bitmap? = null
+    private var backgroundProcessor: VirtualBackgroundProcessor? = null
 
     companion object {
         private const val TAG = "PeerConnectionClient"
@@ -59,6 +72,11 @@ class PeerConnectionClient(
             .setVideoEncoderFactory(encoderFactory)
             .createPeerConnectionFactory()
 
+        if (e2eeEnabled) {
+            e2ee = E2eeManager(factory!!)
+            Log.d(TAG, "E2EE enabled")
+        }
+
         // Setup peer connection constraints
         pcConstraints.mandatory.apply {
             add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
@@ -82,7 +100,8 @@ class PeerConnectionClient(
             socket = socket,
             roomId = roomId,
             onPeerCreated = { createPeer() },
-            getPeer = { peer }
+            getPeer = { peer },
+            e2ee = e2ee
         )
 
         signalingHandler.setupListeners()
@@ -95,7 +114,8 @@ class PeerConnectionClient(
             localStream = localStream!!,
             pcConstraints = pcConstraints,
             listener = listener,
-            signalingHandler = signalingHandler
+            signalingHandler = signalingHandler,
+            e2ee = e2ee
         )
         return peer!!
     }
@@ -151,6 +171,9 @@ class PeerConnectionClient(
             it.dispose()
             Log.d(TAG, "Old capturer disposed")
         }
+
+        // Virtual background is camera-only; the file capturer reuses this VideoSource.
+        detachVirtualBackground()
 
         // 2. CRITICAL: Dispose the old helper and create a NEW one.
         // This provides a fresh, unconnected Surface for the MediaCodec.
@@ -226,6 +249,8 @@ class PeerConnectionClient(
         videoSource = factory!!.createVideoSource(videoCapturer!!.isScreencast)
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
 
+        if (!isScreencast) attachVirtualBackground()
+
         // Initialize the new capturer
         videoCapturer!!.initialize(surfaceTextureHelper, context, videoSource!!.capturerObserver)
 
@@ -272,6 +297,13 @@ class PeerConnectionClient(
         peer?.dispose()
         peer = null
 
+        // After every cryptor (owned by the peer) is gone.
+        e2ee?.dispose()
+        e2ee = null
+
+        segmenter?.release()
+        segmenter = null
+
         Log.d(TAG, "Closing peer connection factory.")
         factory?.dispose()
         factory = null
@@ -282,7 +314,48 @@ class PeerConnectionClient(
         Log.d(TAG, "Cleanup complete.")
     }
 
+    fun toggleVirtualBackground(enable: Boolean) {
+        virtualBackgroundEnabled = enable
+        if (enable) ensureVirtualBackgroundResources()
+        backgroundProcessor?.let {
+            it.segmenter = segmenter
+            it.background = backgroundBitmap
+            it.setEnabled(enable)
+        }
+        Log.d(TAG, "Virtual background ${if (enable) "enabled" else "disabled"}")
+    }
+
     // ========== Private Helper Methods ==========
+
+    private fun ensureVirtualBackgroundResources() {
+        if (segmenter == null) segmenter = SelfieSegmenter(context)
+        if (backgroundBitmap == null) {
+            val options = BitmapFactory.Options().apply { inScaled = false }
+            backgroundBitmap = BitmapFactory.decodeResource(context.resources, R.drawable.virtual_background, options)
+        }
+    }
+
+    /** Installs the processor on the current camera VideoSource; frames pass through while disabled. */
+    private fun attachVirtualBackground() {
+        val source = videoSource ?: return
+        val processor = VirtualBackgroundProcessor().apply {
+            segmenter = this@PeerConnectionClient.segmenter
+            background = backgroundBitmap
+            setEnabled(virtualBackgroundEnabled)
+        }
+        source.setVideoProcessor(processor)
+        backgroundProcessor = processor
+    }
+
+    /** Must run while the SurfaceTextureHelper the processor rendered on is still alive. */
+    private fun detachVirtualBackground() {
+        val processor = backgroundProcessor ?: return
+        backgroundProcessor = null
+        videoSource?.setVideoProcessor(null)
+        surfaceTextureHelper?.handler?.let { handler ->
+            ThreadUtils.invokeAtFrontUninterruptibly(handler) { processor.releaseGl() }
+        }
+    }
 
     private fun setupCamera() {
         localStream = factory!!.createLocalMediaStream("LOCAL_MS")
@@ -290,6 +363,7 @@ class PeerConnectionClient(
         videoSource = factory!!.createVideoSource(videoCapturer!!.isScreencast)
 
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
+        attachVirtualBackground()
         videoCapturer!!.initialize(surfaceTextureHelper, context, videoSource!!.capturerObserver)
 
         val (width, height, fps) = getCameraCaptureDimensions()
@@ -384,6 +458,8 @@ class PeerConnectionClient(
     }
 
     private fun cleanupMediaResources() {
+        detachVirtualBackground()
+
         audioSource?.dispose()
         audioSource = null
 

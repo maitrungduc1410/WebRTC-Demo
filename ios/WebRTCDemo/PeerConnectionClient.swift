@@ -10,6 +10,7 @@ import Foundation
 import WebRTC
 import ReplayKit
 import AVFoundation
+import Security
 
 protocol WebRTCClientDelegate {
     func didGenerateCandidate(iceCandidate: RTCIceCandidate)
@@ -53,6 +54,19 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var audioSession: AVAudioSession?
     
+    // Virtual background (camera frames only)
+    private var virtualBackgroundProcessor: VirtualBackgroundProcessor?
+    
+    // E2EE properties
+    private static let e2eeRatchetSalt = "LKFrameEncryptionKey"
+    private static let e2eeKeyLength = 32
+    private static let e2eeKeyIndex: Int32 = 0
+    public private(set) var isE2EEEnabled = false
+    private var keyProvider: RTCFrameCryptorKeyProvider?
+    // Cryptors are created from both the main and signaling threads, so access goes through the lock
+    private var frameCryptors: [String: RTCFrameCryptor] = [:]
+    private let frameCryptorsLock = NSLock()
+    
     var delegate: WebRTCClientDelegate?
     public private(set) var isConnected: Bool = false
     
@@ -76,7 +90,7 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
     }
     
     // MARK: - Public functions
-    func setup(videoTrack: Bool, audioTrack: Bool, customFrameCapturer: Bool){
+    func setup(videoTrack: Bool, audioTrack: Bool, customFrameCapturer: Bool, enableE2EE: Bool = false){
         print("set up")
         self.channels.video = videoTrack
         self.channels.audio = audioTrack
@@ -88,6 +102,10 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
             encoderFactory: videoEncoderFactory,
             decoderFactory: videoDecoderFactory
         )
+        
+        if enableE2EE {
+            setupE2EE()
+        }
         
         setupView()
         setupLocalTracks()
@@ -124,6 +142,8 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
         if self.channels.audio {
             self.peerConnection!.add(localAudioTrack, streamIds: ["stream0"])
         }
+        attachSenderCryptors()
+        applyE2EECodecPreferences()
         
         makeOffer(onSuccess: onSuccess)
     }
@@ -137,6 +157,8 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
         if self.peerConnection != nil{
             self.peerConnection!.close()
         }
+        // Dropped only after close(): in M150 a disabled cryptor would forward frames unencrypted
+        disposeFrameCryptors()
     }
     
     // MARK: Signaling Event
@@ -156,7 +178,7 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
                 self.peerConnection!
                     .add(localAudioTrack, streamIds: ["stream-0"])
             }
-            
+            attachSenderCryptors()
         }
         
         print("set remote description")
@@ -168,6 +190,8 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
             }
             
             print("succeed to set remote offer SDP")
+            self.attachReceiverCryptors()
+            self.applyE2EECodecPreferences()
             self.makeAnswer(onCreateAnswer: onCreateAnswer)
         }
     }
@@ -181,6 +205,7 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate, RTCVideoViewDelegate {
             }
             
             print("succeed to set remote answer SDP")
+            self.attachReceiverCryptors()
         }
     }
     
@@ -265,7 +290,10 @@ candidate,
             self.videoCapturer = RTCFileVideoCapturer(delegate: videoSource!)
         }
         else {
-            self.videoCapturer = RTCCameraVideoCapturer(delegate: videoSource!)
+            // The capturer only keeps a weak delegate, so the processor is retained here
+            let processor = VirtualBackgroundProcessor(output: videoSource!)
+            self.virtualBackgroundProcessor = processor
+            self.videoCapturer = RTCCameraVideoCapturer(delegate: processor)
         }
         let videoTrack = self.peerConnectionFactory.videoTrack(
             with: videoSource!,
@@ -427,6 +455,7 @@ candidate,
             
             self.peerConnection!.close()
             self.peerConnection = nil
+            self.disposeFrameCryptors()
             self.remoteRenderView?.isHidden = true
             self.delegate?.didDisconnectWebRTC()
         }
@@ -472,6 +501,15 @@ extension WebRTCClient {
             print("audio track found")
             audioTrack.source.volume = 8
         }
+    }
+    
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didAdd rtpReceiver: RTCRtpReceiver,
+        streams mediaStreams: [RTCMediaStream]
+    ) {
+        print("did add receiver: ", rtpReceiver.receiverId)
+        attachReceiverCryptor(rtpReceiver)
     }
     
     func peerConnection(
@@ -999,5 +1037,187 @@ extension WebRTCClient {
             print("❌ Failed to setup audio session for background: \(error)")
         }
     }
+    
+    // MARK: - Virtual Background
+    var isVirtualBackgroundAvailable: Bool {
+        return virtualBackgroundProcessor != nil
+    }
+    
+    var isVirtualBackgroundEnabled: Bool {
+        return virtualBackgroundProcessor?.isEnabled ?? false
+    }
+    
+    func setVirtualBackground(enabled: Bool) {
+        print("setVirtualBackground: \(enabled)")
+        virtualBackgroundProcessor?.isEnabled = enabled
+    }
 
+}
+
+// MARK: - E2EE
+extension WebRTCClient {
+    /// Generates new key material, installs it as the shared key and returns it so it can be sent to the remote peer.
+    func generateEncryptionKey() -> Data? {
+        guard isE2EEEnabled, let keyProvider = keyProvider else { return nil }
+        
+        var bytes = [UInt8](repeating: 0, count: WebRTCClient.e2eeKeyLength)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard status == errSecSuccess else {
+            print("failed to generate encryption key: \(status)")
+            return nil
+        }
+        
+        let key = Data(bytes)
+        keyProvider.setSharedKey(key, with: WebRTCClient.e2eeKeyIndex)
+        print("generated encryption key (\(key.count) bytes)")
+        return key
+    }
+    
+    /// Installs key material received from the remote peer. Returns false when E2EE is off.
+    @discardableResult
+    func setEncryptionKey(_ key: Data) -> Bool {
+        guard isE2EEEnabled, let keyProvider = keyProvider else { return false }
+        
+        if key.count != WebRTCClient.e2eeKeyLength {
+            print("unexpected encryption key length: \(key.count)")
+        }
+        keyProvider.setSharedKey(key, with: WebRTCClient.e2eeKeyIndex)
+        print("received encryption key (\(key.count) bytes)")
+        return true
+    }
+    
+    private func setupE2EE() {
+        isE2EEEnabled = true
+        keyProvider = RTCFrameCryptorKeyProvider(
+            ratchetSalt: Data(WebRTCClient.e2eeRatchetSalt.utf8),
+            ratchetWindowSize: 0,
+            sharedKeyMode: true,
+            uncryptedMagicBytes: nil,
+            failureTolerance: -1,
+            keyRingSize: 16,
+            discardFrameWhenCryptorNotReady: false,
+            keyDerivationAlgorithm: RTCKeyDerivationAlgorithm(rawValue: 0)! // PBKDF2
+        )
+    }
+    
+    private func attachSenderCryptors() {
+        guard isE2EEEnabled, let peerConnection = peerConnection else { return }
+        
+        for sender in peerConnection.senders where sender.track != nil {
+            attachCryptor(id: "sender-\(sender.senderId)") { factory, keyProvider in
+                RTCFrameCryptor(
+                    factory: factory,
+                    rtpSender: sender,
+                    participantId: "local",
+                    algorithm: .aesGcm,
+                    keyProvider: keyProvider
+                )
+            }
+        }
+    }
+    
+    private func attachReceiverCryptors() {
+        guard isE2EEEnabled, let peerConnection = peerConnection else { return }
+        
+        for receiver in peerConnection.receivers {
+            attachReceiverCryptor(receiver)
+        }
+    }
+    
+    private func attachReceiverCryptor(_ receiver: RTCRtpReceiver) {
+        guard isE2EEEnabled, receiver.track != nil else { return }
+        
+        attachCryptor(id: "receiver-\(receiver.receiverId)") { factory, keyProvider in
+            RTCFrameCryptor(
+                factory: factory,
+                rtpReceiver: receiver,
+                participantId: "remote",
+                algorithm: .aesGcm,
+                keyProvider: keyProvider
+            )
+        }
+    }
+    
+    // Sender cryptors are created on the main thread and block on the signaling thread,
+    // receiver cryptors are created on the signaling thread, so the lock is not held while creating.
+    private func attachCryptor(
+        id: String,
+        create: (RTCPeerConnectionFactory, RTCFrameCryptorKeyProvider) -> RTCFrameCryptor?
+    ) {
+        guard let keyProvider = keyProvider else { return }
+        
+        frameCryptorsLock.lock()
+        let exists = frameCryptors[id] != nil
+        frameCryptorsLock.unlock()
+        if exists { return }
+        
+        guard let cryptor = create(peerConnectionFactory, keyProvider) else {
+            print("failed to create frame cryptor: \(id)")
+            return
+        }
+        cryptor.keyIndex = WebRTCClient.e2eeKeyIndex
+        cryptor.delegate = self
+        // M150 forwards frames unencrypted while a cryptor is disabled, so enable it right away
+        cryptor.enabled = true
+        
+        frameCryptorsLock.lock()
+        frameCryptors[id] = cryptor
+        frameCryptorsLock.unlock()
+        print("frame cryptor attached: \(id)")
+    }
+    
+    private func disposeFrameCryptors() {
+        frameCryptorsLock.lock()
+        let cryptors = Array(frameCryptors.values)
+        frameCryptors.removeAll()
+        frameCryptorsLock.unlock()
+        
+        cryptors.forEach { $0.delegate = nil }
+        if !cryptors.isEmpty {
+            print("disposed \(cryptors.count) frame cryptors")
+        }
+    }
+    
+    // Same order as web/Android so every platform negotiates VP8 when E2EE is on
+    private func applyE2EECodecPreferences() {
+        guard isE2EEEnabled, let peerConnection = peerConnection else { return }
+        
+        let codecs = peerConnectionFactory.rtpReceiverCapabilities(forKind: "video").codecs
+        let isVP8: (RTCRtpCodecCapability) -> Bool = { $0.mimeType.lowercased() == "video/vp8" }
+        let preferred = codecs.filter(isVP8) + codecs.filter { !isVP8($0) }
+        
+        for transceiver in peerConnection.transceivers where transceiver.mediaType == .video {
+            transceiver.codecPreferences = preferred
+        }
+    }
+}
+
+// MARK: - Frame Cryptor Delegate
+extension WebRTCClient: RTCFrameCryptorDelegate {
+    func frameCryptor(
+        _ frameCryptor: RTCFrameCryptor,
+        didStateChangeWithParticipantId participantId: String,
+        with stateChanged: RTCFrameCryptorState
+    ) {
+        let state: String
+        switch stateChanged {
+        case .new:
+            state = "new"
+        case .ok:
+            state = "ok"
+        case .encryptionFailed:
+            state = "encryptionFailed"
+        case .decryptionFailed:
+            state = "decryptionFailed"
+        case .missingKey:
+            state = "missingKey"
+        case .keyRatcheted:
+            state = "keyRatcheted"
+        case .internalError:
+            state = "internalError"
+        @unknown default:
+            state = "unknown(\(stateChanged.rawValue))"
+        }
+        print("frame cryptor state changed, participant: \(participantId), state: \(state)")
+    }
 }

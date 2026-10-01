@@ -2,6 +2,7 @@ package com.example.myapplication.webrtc
 
 import android.util.Log
 import io.socket.client.Socket
+import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
@@ -13,7 +14,8 @@ class SignalingHandler(
     private val socket: Socket,
     private val roomId: String,
     private val onPeerCreated: () -> WebRtcPeer,
-    private val getPeer: () -> WebRtcPeer?
+    private val getPeer: () -> WebRtcPeer?,
+    private val e2ee: E2eeManager? = null
 ) {
     companion object {
         private const val TAG = "SignalingHandler"
@@ -25,6 +27,8 @@ class SignalingHandler(
         socket.on("offer", onOffer)
         socket.on("answer", onAnswer)
         socket.on("new ice candidate", onNewIceCandidate)
+        socket.on("receive encryption key", onReceiveEncryptionKey)
+        socket.on("remote peer received encryption key", onRemotePeerReceivedEncryptionKey)
         socket.on(Socket.EVENT_DISCONNECT, onDisconnect)
     }
 
@@ -44,7 +48,54 @@ class SignalingHandler(
 
     private val onNewUserJoined = io.socket.emitter.Emitter.Listener {
         val peer = onPeerCreated()
+        // The server relays on the same socket in order, so the key reaches the remote before the offer.
+        e2ee?.let { sendEncryptionKey(it) }
         peer.createOffer()
+    }
+
+    private val onReceiveEncryptionKey = io.socket.emitter.Emitter.Listener { args ->
+        val data = args.getOrNull(0) as? JSONObject
+        val key = parseKey(data?.opt("encryptionKey"))
+        if (e2ee == null) {
+            Log.w(TAG, "Received an encryption key but E2EE is disabled; remote media will not decode")
+            return@Listener
+        }
+        if (key == null) {
+            Log.e(TAG, "receive encryption key: missing or non-binary encryptionKey")
+            return@Listener
+        }
+        e2ee.setSharedKey(key)
+        try {
+            socket.emit("encryption key received", JSONObject().put("roomId", roomId))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private val onRemotePeerReceivedEncryptionKey = io.socket.emitter.Emitter.Listener {
+        Log.d(TAG, "Remote peer received encryption key")
+    }
+
+    /** Binary attachments arrive as ByteArray; a JSON number array is accepted as a fallback. */
+    private fun parseKey(value: Any?): ByteArray? = when (value) {
+        is ByteArray -> value
+        is JSONArray -> ByteArray(value.length()) { value.getInt(it).toByte() }
+        else -> null
+    }
+
+    private fun sendEncryptionKey(e2ee: E2eeManager) {
+        val material = e2ee.generateKeyMaterial()
+        e2ee.setSharedKey(material)
+        try {
+            // socket.io-client sends ByteArray values as binary attachments (ArrayBuffer on web).
+            val payload = JSONObject().apply {
+                put("roomId", roomId)
+                put("encryptionKey", material)
+            }
+            socket.emit("send encryption key", payload)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private val onOffer = io.socket.emitter.Emitter.Listener { args ->
@@ -144,6 +195,8 @@ class SignalingHandler(
         socket.off("offer", onOffer)
         socket.off("answer", onAnswer)
         socket.off("new ice candidate", onNewIceCandidate)
+        socket.off("receive encryption key", onReceiveEncryptionKey)
+        socket.off("remote peer received encryption key", onRemotePeerReceivedEncryptionKey)
         socket.off(Socket.EVENT_DISCONNECT, onDisconnect)
         socket.close()
     }

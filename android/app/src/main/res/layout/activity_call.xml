@@ -248,6 +248,35 @@
                     android:textColor="@color/white_60"
                      />
             </LinearLayout>
+
+            <!-- Background Button -->
+            <LinearLayout
+                android:id="@+id/toggle_background"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btn_background"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/secondary_control_button_background"
+                    android:contentDescription="Background"
+                    android:padding="12dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/person_and_background_dotted"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Background"
+                    android:textColor="@color/white_60"
+                     />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Main Controls Panel -->

@@ -126,6 +126,16 @@
                             android:textStyle="bold" />
                     </FrameLayout>
 
+                    <!-- End-to-end encryption toggle (both peers must enable it) -->
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchE2ee"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="20dp"
+                        android:text="Enable E2EE"
+                        android:textColor="@color/white"
+                        android:textSize="16sp" />
+
                     <!-- Join Room Button -->
                     <Button
                         android:id="@+id/btnJoin"

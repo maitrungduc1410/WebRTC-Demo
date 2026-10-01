@@ -36,6 +36,7 @@
 		2BF2E2282CA14F2E003EFE08 /* WebRTCDemoScreenBroadcastSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2BF2E21E2CA14F2E003EFE08 /* WebRTCDemoScreenBroadcastSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2BF2E22B2CA14F2E003EFE08 /* WebRTCDemoScreenBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2BF2E2132CA14F2E003EFE08 /* WebRTCDemoScreenBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8F909062B84A554A86DBCACD /* Pods_WebRTCDemoScreenBroadcast.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A272B9F2D2B26CDD4DC19CB /* Pods_WebRTCDemoScreenBroadcast.framework */; };
+		2BA1E0022F20A00100E2EE01 /* VirtualBackgroundProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA1E0012F20A00100E2EE01 /* VirtualBackgroundProcessor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,6 +114,7 @@
 		BD8843436D2FB83046716579 /* Pods-WebRTCDemoScreenBroadcast.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WebRTCDemoScreenBroadcast.debug.xcconfig"; path = "Target Support Files/Pods-WebRTCDemoScreenBroadcast/Pods-WebRTCDemoScreenBroadcast.debug.xcconfig"; sourceTree = "<group>"; };
 		EB4C4CE6D9622011D0223E17 /* Pods-WebRTCDemoScreenBroadcast.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WebRTCDemoScreenBroadcast.release.xcconfig"; path = "Target Support Files/Pods-WebRTCDemoScreenBroadcast/Pods-WebRTCDemoScreenBroadcast.release.xcconfig"; sourceTree = "<group>"; };
 		F27C035422F919648ABB9E2C /* Pods-WebRTCDemo.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WebRTCDemo.debug.xcconfig"; path = "Target Support Files/Pods-WebRTCDemo/Pods-WebRTCDemo.debug.xcconfig"; sourceTree = "<group>"; };
+		2BA1E0012F20A00100E2EE01 /* VirtualBackgroundProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualBackgroundProcessor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -179,6 +181,7 @@
 				2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */,
 				2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */,
 				2BD4B3CA2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift */,
+				2BA1E0012F20A00100E2EE01 /* VirtualBackgroundProcessor.swift */,
 				2B7458062C98569C003184F2 /* SceneDelegate.swift */,
 				2B7458082C98569C003184F2 /* ViewController.swift */,
 				2BD4B3D22F14CCB60092E3C4 /* DarwinNotificationCenter.swift */,
@@ -452,6 +455,7 @@
 				2B7458072C98569C003184F2 /* SceneDelegate.swift in Sources */,
 				2BBD7BE62C986938003B4801 /* RTCCustomFrameCapturer.swift in Sources */,
 				2BD4B3CB2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift in Sources */,
+				2BA1E0022F20A00100E2EE01 /* VirtualBackgroundProcessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

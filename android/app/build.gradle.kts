@@ -51,9 +51,10 @@ dependencies {
 
     implementation("io.socket:socket.io-client:2.1.2")
 
-    implementation("io.github.webrtc-sdk:android:137.7151.05") // same WebRTC API, no code change required
+    implementation("io.github.webrtc-sdk:android:150.7871.01")
 //    implementation("io.getstream:stream-webrtc-android:1.1.3") // same WebRTC API, no code change required
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
     implementation("com.google.android.flexbox:flexbox:3.0.0")
+    implementation("com.google.mediapipe:tasks-vision:1.0.0")
 
 }

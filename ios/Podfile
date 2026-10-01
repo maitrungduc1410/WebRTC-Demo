@@ -7,7 +7,7 @@ target 'WebRTCDemo' do
 
   # Pods for WebRTCDemo
 
-  pod 'WebRTC-SDK', '=137.7151.11'
+  pod 'WebRTC-SDK', '=150.7871.01'
   pod 'Socket.IO-Client-Swift', '16.1.0'
 
 end

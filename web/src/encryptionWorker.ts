@@ -1,56 +1,58 @@
-import { encryptStream, decryptStream } from "./e2ee";
+import {
+  encryptStream,
+  decryptStream,
+  deriveFrameKey,
+  generateKeyMaterial,
+  type CodecMap,
+  type FrameTransformOptions,
+  type MediaKind,
+} from "./e2ee";
 
-let encryptionKey: CryptoKey;
+let encryptionKey: CryptoKey | undefined;
+let codecMap: CodecMap = {};
+
+function transformOptions(kind: MediaKind): FrameTransformOptions {
+  return { kind, getKey: () => encryptionKey, getCodecMap: () => codecMap };
+}
+
+function startPipeline(operation: "encrypt" | "decrypt", kind: MediaKind, readable: ReadableStream, writable: WritableStream) {
+  const pipe = operation === "encrypt" ? encryptStream : decryptStream;
+  pipe(transformOptions(kind), readable, writable).catch((error) =>
+    console.error(`E2EE ${operation} ${kind} pipeline closed:`, error)
+  );
+}
 
 // Handle incoming messages from the main thread
 self.onmessage = async (event) => {
-  const { action, key, readable, writable, shouldSendEncryptionKey } =
-    event.data;
+  const { action, key, readable, writable, kind } = event.data;
 
   switch (action) {
-    case "generateKey":
-      await generateKey();
-      self.postMessage({ action: "generatedKey", key: encryptionKey });
+    case "generateKey": {
+      const material = generateKeyMaterial();
+      encryptionKey = await deriveFrameKey(material);
+      self.postMessage({ action: "generatedKey", key: material });
       break;
+    }
 
     case "setKey":
-      await setKey(key);
+      encryptionKey = await deriveFrameKey(key);
+      console.log("E2EE key set");
+      break;
+
+    case "setCodecMap":
+      codecMap = event.data.codecMap;
       break;
 
     case "encrypt":
-      await encryptStream(encryptionKey, readable, writable);
-      break;
-
     case "decrypt":
-      // no need to decrypt remote stream if shouldSendEncryptionKey = false, instead just directly display it
-      await decryptStream(
-        shouldSendEncryptionKey ? encryptionKey : undefined,
-        readable,
-        writable
-      );
+      startPipeline(action, kind, readable, writable);
       break;
   }
 };
 
-// Generate the encryption key (AES-GCM example)
-async function generateKey() {
-  encryptionKey = await crypto.subtle.generateKey(
-    {
-      name: "AES-GCM",
-      length: 256,
-    },
-    true,
-    ["encrypt", "decrypt"]
-  );
-}
-
-async function setKey(key: ArrayBuffer) {
-  encryptionKey = await crypto.subtle.importKey(
-    "raw",
-    key,
-    { name: "AES-GCM" },
-    true,
-    ["encrypt", "decrypt"]
-  );
-  console.log("Key set:", encryptionKey);
-}
+// Safari / Firefox: RTCRtpScriptTransform delivers the streams through this event
+// @ts-ignore
+self.onrtctransform = (event: any) => {
+  const { operation, kind } = event.transformer.options;
+  startPipeline(operation, kind, event.transformer.readable, event.transformer.writable);
+};

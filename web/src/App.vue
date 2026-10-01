@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import io, { Socket } from 'socket.io-client'
 import { onBeforeMount, ref, computed, nextTick } from 'vue';
-import { encryptStream, decryptStream } from "./e2ee";
+import {
+  encryptStream,
+  decryptStream,
+  deriveFrameKey,
+  generateKeyMaterial,
+  parseCodecMap,
+  type CodecMap,
+  type MediaKind,
+} from "./e2ee";
 import {
   Video,
   Shuffle,
@@ -81,10 +89,11 @@ let videoFileElement: HTMLVideoElement | null = null
 let videoFileStream: MediaStream | null = null
 
 const enableE2EE = ref(false); // User can toggle this
-let encryptionKey: CryptoKey;
-const shouldSendEncryptionKey = true;
+let encryptionKey: CryptoKey | undefined;
+let codecMap: CodecMap = {};
 const useEncryptionWorker = true;
 let encryptionWorker: Worker | undefined = undefined
+const transformedRtpObjects = new WeakSet<RTCRtpSender | RTCRtpReceiver>()
 
 const connectionStatus = computed(() => {
   if (peersConnected.value) return 'Connected';
@@ -162,14 +171,17 @@ onBeforeMount(() => {
     }
 
     await peerConnection!.setRemoteDescription(new RTCSessionDescription(data.offer))
+    applyE2EECodecPreferences()
     const answer = await peerConnection!.createAnswer()
     await peerConnection!.setLocalDescription(answer)
+    updateCodecMap()
     socket!.emit('answer', { answer, roomId: roomId.value })
   })
 
   socket.on('answer', async data => {
     const remoteDesc = new RTCSessionDescription(data.answer)
     await peerConnection!.setRemoteDescription(remoteDesc)
+    updateCodecMap()
   })
 
   socket.on('new ice candidate', async data => {
@@ -179,7 +191,8 @@ onBeforeMount(() => {
   })
 
   socket.on('receive encryption key', async (data: { encryptionKey: ArrayBuffer }) => {
-    console.log('Received encryption key:', data.encryptionKey);
+    console.log('Received encryption key material:', data.encryptionKey.byteLength, 'bytes');
+    if (!enableE2EE.value) return;
 
     if (useEncryptionWorker && encryptionWorker) {
       encryptionWorker.postMessage({
@@ -187,13 +200,7 @@ onBeforeMount(() => {
         key: data.encryptionKey
       });
     } else {
-      encryptionKey = await window.crypto.subtle.importKey(
-        "raw",
-        data.encryptionKey,
-        { name: "AES-GCM" },
-        true,
-        ["encrypt", "decrypt"]
-      );
+      encryptionKey = await deriveFrameKey(data.encryptionKey);
     }
 
     socket!.emit('encryption key received', { roomId: roomId.value });
@@ -210,12 +217,14 @@ async function init() {
   })
 
   initPeerEvents()
+  applyE2EECodecPreferences()
 
   const offer = await peerConnection!.createOffer({
     offerToReceiveAudio: true,
     offerToReceiveVideo: true
   })
   await peerConnection!.setLocalDescription(offer)
+  updateCodecMap()
   socket!.emit('offer', { offer, roomId: roomId.value })
 }
 
@@ -315,11 +324,7 @@ async function joinRoom() {
     encryptionWorker.onmessage = async (event) => {
       const { action, key } = event.data;
       if (action === "generatedKey") {
-        encryptionKey = key;
-        if (shouldSendEncryptionKey) {
-          const exportedKey = await window.crypto.subtle.exportKey("raw", encryptionKey);
-          socket!.emit('send encryption key', { roomId: roomId.value, encryptionKey: exportedKey });
-        }
+        socket!.emit('send encryption key', { roomId: roomId.value, encryptionKey: key });
         init()
       }
     };
@@ -442,6 +447,11 @@ function initPeerEvents() {
       setVideoFromRemoteStream()
     }
 
+    const kind = event.track.kind
+    if (enableE2EE.value && (kind === 'video' || kind === 'audio')) {
+      attachFrameTransform(event.receiver, 'decrypt', kind)
+    }
+
     if (event.track.kind === 'video') {
       for (const track of remoteStream!.getVideoTracks()) {
         remoteStream!.removeTrack(track)
@@ -463,45 +473,69 @@ function initPeerEvents() {
   };
 
   if (enableE2EE.value) {
-    peerConnection!.getSenders().forEach(async sender => {
-      if (sender.track?.kind === 'video' || sender.track?.kind === 'audio') {
-        // @ts-ignore
-        const senderStreams = sender.createEncodedStreams();
-        const readable = senderStreams.readable;
-        const writable = senderStreams.writable;
-
-        if (useEncryptionWorker) {
-          encryptionWorker?.postMessage({
-            action: 'encrypt',
-            readable,
-            writable
-          }, [readable, writable]);
-        } else {
-          await encryptStream(encryptionKey, readable, writable);
-        }
+    peerConnection!.getSenders().forEach(sender => {
+      const kind = sender.track?.kind
+      if (kind === 'video' || kind === 'audio') {
+        attachFrameTransform(sender, 'encrypt', kind)
       }
     });
 
-    peerConnection!.getReceivers().forEach(async receiver => {
-      if (receiver.track.kind === 'video' || receiver.track.kind === 'audio') {
-        // @ts-ignore
-        const receiverStreams = receiver.createEncodedStreams();
-        const readable = receiverStreams.readable;
-        const writable = receiverStreams.writable;
-
-        if (useEncryptionWorker) {
-          encryptionWorker?.postMessage({
-            action: 'decrypt',
-            readable,
-            writable,
-            shouldSendEncryptionKey
-          }, [readable, writable]);
-        } else {
-          await decryptStream(shouldSendEncryptionKey ? encryptionKey : undefined, readable, writable);
-        }
+    peerConnection!.getReceivers().forEach(receiver => {
+      const kind = receiver.track.kind
+      if (kind === 'video' || kind === 'audio') {
+        attachFrameTransform(receiver, 'decrypt', kind)
       }
     });
   }
+}
+
+function attachFrameTransform(
+  senderOrReceiver: RTCRtpSender | RTCRtpReceiver,
+  operation: 'encrypt' | 'decrypt',
+  kind: MediaKind
+) {
+  if (transformedRtpObjects.has(senderOrReceiver)) return
+
+  const target = senderOrReceiver as any
+  const transformOptions = { kind, getKey: () => encryptionKey, getCodecMap: () => codecMap }
+
+  if (typeof target.createEncodedStreams === 'function') {
+    const { readable, writable } = target.createEncodedStreams();
+    transformedRtpObjects.add(senderOrReceiver)
+    if (useEncryptionWorker && encryptionWorker) {
+      encryptionWorker.postMessage({ action: operation, kind, readable, writable }, [readable, writable]);
+    } else {
+      const pipe = operation === 'encrypt' ? encryptStream : decryptStream
+      pipe(transformOptions, readable, writable).catch(error => console.error('E2EE pipeline closed:', error));
+    }
+  } else if ('RTCRtpScriptTransform' in window && encryptionWorker) {
+    // @ts-ignore
+    target.transform = new RTCRtpScriptTransform(encryptionWorker, { operation, kind });
+    transformedRtpObjects.add(senderOrReceiver)
+  } else {
+    console.error('E2EE is not supported in this browser');
+  }
+}
+
+// Android/iOS also put VP8 first when E2EE is on, so all platforms negotiate the same codec.
+function applyE2EECodecPreferences() {
+  if (!enableE2EE.value || !peerConnection) return;
+  const capabilities = RTCRtpReceiver.getCapabilities('video');
+  if (!capabilities) return;
+  const codecs = [...capabilities.codecs].sort((a, b) =>
+    Number(b.mimeType.toLowerCase() === 'video/vp8') - Number(a.mimeType.toLowerCase() === 'video/vp8')
+  );
+  peerConnection.getTransceivers().forEach(transceiver => {
+    if (transceiver.receiver.track.kind === 'video' && typeof transceiver.setCodecPreferences === 'function') {
+      transceiver.setCodecPreferences(codecs);
+    }
+  });
+}
+
+function updateCodecMap() {
+  if (!enableE2EE.value || !peerConnection) return;
+  codecMap = parseCodecMap(peerConnection.localDescription?.sdp, peerConnection.remoteDescription?.sdp);
+  encryptionWorker?.postMessage({ action: 'setCodecMap', codecMap });
 }
 
 async function openDataChannel() {
@@ -512,6 +546,7 @@ async function openDataChannel() {
     offerToReceiveVideo: true
   })
   await peerConnection!.setLocalDescription(offer)
+  updateCodecMap()
   socket!.emit('offer', { offer, roomId: roomId.value })
 
   initDataChannelEvents()
@@ -857,16 +892,9 @@ function handleDragEnd() {
 
 // E2EE
 async function generateEncryptionKey() {
-  encryptionKey = await window.crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
-
-  if (shouldSendEncryptionKey) {
-    const exportedKey = await window.crypto.subtle.exportKey("raw", encryptionKey);
-    socket!.emit('send encryption key', { roomId: roomId.value, encryptionKey: exportedKey });
-  }
+  const material = generateKeyMaterial();
+  encryptionKey = await deriveFrameKey(material);
+  socket!.emit('send encryption key', { roomId: roomId.value, encryptionKey: material });
 }
 
 function generateEncryptionKeyUsingWorker() {
@@ -1138,7 +1166,7 @@ function stopBackgroundProcessing() {
             class="w-5 h-5 rounded border-2 border-white/20 bg-black/20 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer" />
           <div class="flex-1">
             <span class="text-white text-sm font-medium">Enable End-to-End Encryption</span>
-            <p class="text-white/40 text-xs mt-0.5">Encrypt video and audio streams (Web-to-Web only)</p>
+            <p class="text-white/40 text-xs mt-0.5">Encrypt video and audio streams (Web, Android, iOS)</p>
           </div>
         </label>
 

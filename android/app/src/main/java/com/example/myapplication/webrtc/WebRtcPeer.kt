@@ -9,15 +9,23 @@ import java.nio.ByteBuffer
  * ICE candidates, and data channel communication.
  */
 class WebRtcPeer(
-    factory: PeerConnectionFactory,
+    private val factory: PeerConnectionFactory,
     localStream: MediaStream,
     private val pcConstraints: MediaConstraints,
     private val listener: RtcListener,
-    private val signalingHandler: SignalingHandler
+    private val signalingHandler: SignalingHandler,
+    private val e2ee: E2eeManager? = null
 ) : SdpObserver, PeerConnection.Observer, DataChannel.Observer {
 
     val peerConnection: PeerConnection
     private var dataChannel: DataChannel? = null
+    private var disposed = false
+
+    // Strong references: a garbage-collected FrameCryptor would leave the native transformer dangling.
+    private val senderCryptors = mutableMapOf<String, FrameCryptor>()
+    private val receiverCryptors = mutableMapOf<String, FrameCryptor>()
+    private val pendingSenderIds = mutableSetOf<String>()
+    private val pendingReceiverIds = mutableSetOf<String>()
 
     companion object {
         private const val TAG = "WebRtcPeer"
@@ -34,8 +42,8 @@ class WebRtcPeer(
         peerConnection = factory.createPeerConnection(rtcConfig, this)!!
 
         // Add local tracks to peer connection
-        localStream.audioTracks.firstOrNull()?.let { peerConnection.addTrack(it, listOf("ARDAMS")) }
-        localStream.videoTracks.firstOrNull()?.let { peerConnection.addTrack(it, listOf("ARDAMS")) }
+        localStream.audioTracks.firstOrNull()?.let { addTrack(it) }
+        localStream.videoTracks.firstOrNull()?.let { addTrack(it) }
 
         listener.onStatusChanged("CONNECTING")
     }
@@ -43,10 +51,12 @@ class WebRtcPeer(
     // ========== Public Methods ==========
 
     fun createOffer() {
+        applyE2eeCodecPreferences()
         peerConnection.createOffer(this, pcConstraints)
     }
 
     fun createAnswer() {
+        applyE2eeCodecPreferences()
         peerConnection.createAnswer(this, pcConstraints)
     }
 
@@ -65,7 +75,7 @@ class WebRtcPeer(
         val init = DataChannel.Init()
         dataChannel = peerConnection.createDataChannel(channelName, init)
         dataChannel?.registerObserver(this)
-        peerConnection.createOffer(this, pcConstraints)
+        createOffer()
     }
 
     fun sendDataChannelMessage(message: String) {
@@ -77,7 +87,8 @@ class WebRtcPeer(
     }
 
     fun addTrack(track: MediaStreamTrack) {
-        peerConnection.addTrack(track, listOf("ARDAMS"))
+        val sender = peerConnection.addTrack(track, listOf("ARDAMS"))
+        if (sender != null) attachSenderCryptor(sender)
     }
 
     fun removeTrack(sender: RtpSender) {
@@ -95,12 +106,106 @@ class WebRtcPeer(
     }
 
     fun dispose() {
+        synchronized(this) {
+            if (disposed) return
+            disposed = true
+        }
         dataChannel?.let {
             it.unregisterObserver()
             it.dispose()
             dataChannel = null
         }
+        disposeCryptors()
         peerConnection.dispose()
+    }
+
+    // ========== E2EE ==========
+
+    // RtpSender/RtpReceiver/FrameCryptorFactory calls block on the signaling thread, which also
+    // delivers onAddTrack; never make them while holding this monitor.
+    private fun attachSenderCryptor(sender: RtpSender) {
+        val e2ee = e2ee ?: return
+        val attached = attachCryptor(sender.id(), senderCryptors, pendingSenderIds) {
+            e2ee.createSenderCryptor(sender)
+        }
+        if (attached) Log.d(TAG, "E2EE sender cryptor attached (${sender.track()?.kind()})")
+    }
+
+    private fun attachReceiverCryptor(receiver: RtpReceiver) {
+        val e2ee = e2ee ?: return
+        val attached = attachCryptor(receiver.id(), receiverCryptors, pendingReceiverIds) {
+            e2ee.createReceiverCryptor(receiver)
+        }
+        if (attached) Log.d(TAG, "E2EE receiver cryptor attached (${receiver.track()?.kind()})")
+    }
+
+    private fun attachCryptor(
+        id: String,
+        cryptors: MutableMap<String, FrameCryptor>,
+        pendingIds: MutableSet<String>,
+        create: () -> FrameCryptor?
+    ): Boolean {
+        synchronized(this) {
+            if (disposed || cryptors.containsKey(id) || !pendingIds.add(id)) return false
+        }
+        var cryptor: FrameCryptor? = null
+        var stored = false
+        try {
+            cryptor = create()
+        } finally {
+            synchronized(this) {
+                pendingIds.remove(id)
+                if (cryptor != null && !disposed) {
+                    cryptors[id] = cryptor
+                    stored = true
+                }
+            }
+            if (cryptor != null && !stored) disposeCryptor(cryptor)
+        }
+        return stored
+    }
+
+    /** Covers receivers created by addTrack (offerer side) before onAddTrack fires. */
+    private fun attachAllReceiverCryptors() {
+        if (e2ee == null) return
+        peerConnection.transceivers.forEach { attachReceiverCryptor(it.receiver) }
+    }
+
+    private fun disposeCryptors() {
+        val cryptors = synchronized(this) {
+            (senderCryptors.values + receiverCryptors.values).also {
+                senderCryptors.clear()
+                receiverCryptors.clear()
+            }
+        }
+        cryptors.forEach { disposeCryptor(it) }
+    }
+
+    private fun disposeCryptor(cryptor: FrameCryptor) {
+        try {
+            cryptor.dispose()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "FrameCryptor already disposed", e)
+        }
+    }
+
+    /**
+     * Web and iOS reliably handle the FrameCryptor VP8 header layout, so negotiate VP8 first
+     * and keep the remaining codecs as fallbacks.
+     */
+    private fun applyE2eeCodecPreferences() {
+        if (e2ee == null) return
+        attachAllReceiverCryptors()
+        val codecs = factory.getRtpReceiverCapabilities(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO).codecs
+        val preferred = codecs.sortedBy { if (it.name.equals("VP8", ignoreCase = true)) 0 else 1 }
+        peerConnection.transceivers
+            .filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO && !it.isStopped }
+            .forEach { transceiver ->
+                val result = transceiver.setCodecPreferences(preferred)
+                if (result.isError) {
+                    Log.w(TAG, "setCodecPreferences failed: ${result.error()?.message}")
+                }
+            }
     }
 
     // ========== SdpObserver Implementation ==========
@@ -157,6 +262,11 @@ class WebRtcPeer(
     override fun onAddStream(mediaStream: MediaStream) {
         Log.d(TAG, "onAddStream ${mediaStream.id}")
         listener.onAddRemoteStream(mediaStream)
+    }
+
+    override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
+        Log.d(TAG, "onAddTrack ${receiver.track()?.kind()}")
+        attachReceiverCryptor(receiver)
     }
 
     override fun onRemoveStream(mediaStream: MediaStream) {

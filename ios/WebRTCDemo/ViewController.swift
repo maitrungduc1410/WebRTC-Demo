@@ -20,6 +20,9 @@ class ViewController: UIViewController {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let roomIdTextField = UITextField()
+    private let e2eeContainer = UIView()
+    private let e2eeLabel = UILabel()
+    private let e2eeSwitch = UISwitch()
     private let joinButton = UIButton(type: .system)
     private let orDividerContainer = UIView()
     private let leftLine = UIView()
@@ -126,6 +129,21 @@ class ViewController: UIViewController {
         roomIdTextField.delegate = self
         roomIdTextField.translatesAutoresizingMaskIntoConstraints = false
         glassPanelContainer.addSubview(roomIdTextField)
+        
+        // E2EE switch
+        e2eeContainer.translatesAutoresizingMaskIntoConstraints = false
+        glassPanelContainer.addSubview(e2eeContainer)
+        
+        e2eeLabel.text = "Enable E2EE"
+        e2eeLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        e2eeLabel.textColor = UIColor.white.withAlphaComponent(0.8)
+        e2eeLabel.translatesAutoresizingMaskIntoConstraints = false
+        e2eeContainer.addSubview(e2eeLabel)
+        
+        e2eeSwitch.isOn = false
+        e2eeSwitch.onTintColor = UIColor(red: 0.24, green: 0.51, blue: 0.96, alpha: 1.0)
+        e2eeSwitch.translatesAutoresizingMaskIntoConstraints = false
+        e2eeContainer.addSubview(e2eeSwitch)
         
         // Join button
         joinButton.setTitle("Join Room", for: .normal)
@@ -243,8 +261,20 @@ class ViewController: UIViewController {
             roomIdTextField.trailingAnchor.constraint(equalTo: glassPanelContainer.trailingAnchor, constant: -32),
             roomIdTextField.heightAnchor.constraint(equalToConstant: 56),
             
+            // E2EE switch
+            e2eeContainer.topAnchor.constraint(equalTo: roomIdTextField.bottomAnchor, constant: 12),
+            e2eeContainer.leadingAnchor.constraint(equalTo: glassPanelContainer.leadingAnchor, constant: 32),
+            e2eeContainer.trailingAnchor.constraint(equalTo: glassPanelContainer.trailingAnchor, constant: -32),
+            e2eeContainer.heightAnchor.constraint(equalToConstant: 32),
+            
+            e2eeLabel.leadingAnchor.constraint(equalTo: e2eeContainer.leadingAnchor, constant: 4),
+            e2eeLabel.centerYAnchor.constraint(equalTo: e2eeContainer.centerYAnchor),
+            
+            e2eeSwitch.trailingAnchor.constraint(equalTo: e2eeContainer.trailingAnchor),
+            e2eeSwitch.centerYAnchor.constraint(equalTo: e2eeContainer.centerYAnchor),
+            
             // Join button
-            joinButton.topAnchor.constraint(equalTo: roomIdTextField.bottomAnchor, constant: 12),
+            joinButton.topAnchor.constraint(equalTo: e2eeContainer.bottomAnchor, constant: 12),
             joinButton.leadingAnchor.constraint(equalTo: glassPanelContainer.leadingAnchor, constant: 32),
             joinButton.trailingAnchor.constraint(equalTo: glassPanelContainer.trailingAnchor, constant: -32),
             joinButton.heightAnchor.constraint(equalToConstant: 56),
@@ -293,6 +323,7 @@ class ViewController: UIViewController {
         
         let callVC = CallViewController()
         callVC.roomId = roomId
+        callVC.enableE2EE = e2eeSwitch.isOn
         navigationController?.pushViewController(callVC, animated: true)
     }
     

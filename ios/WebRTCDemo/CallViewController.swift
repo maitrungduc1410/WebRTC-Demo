@@ -22,6 +22,7 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
     var socket: SocketIOClient!
     var webRTCClient: WebRTCClient!
     var useCustomCapturer: Bool = false
+    var enableE2EE: Bool = false
     
     // UI State
     private var videoEnabled = true
@@ -31,6 +32,7 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
     private var isScreenSharing = false
     private var isVideoFileSharing = false
     private var peersConnected = false
+    private var isVirtualBackgroundOn = false
     
     // UI Elements
     private let remoteVideoContainer = UIView()
@@ -71,6 +73,10 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
     private let speakerContainer = UIView()
     private let speakerButton = UIButton(type: .system)
     private let speakerLabel = UILabel()
+    
+    private let backgroundContainer = UIView()
+    private let backgroundButton = UIButton(type: .system)
+    private let backgroundLabel = UILabel()
     
     // Primary Control Containers
     private let muteContainer = UIView()
@@ -158,8 +164,14 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
             
             self.webRTCClient = WebRTCClient()
             self.webRTCClient.delegate = self
-            self.webRTCClient.setup(videoTrack: true, audioTrack: true, customFrameCapturer: self.useCustomCapturer)
+            self.webRTCClient.setup(
+                videoTrack: true,
+                audioTrack: true,
+                customFrameCapturer: self.useCustomCapturer,
+                enableE2EE: self.enableE2EE
+            )
             self.setupVideoViews()
+            self.backgroundButton.isEnabled = self.webRTCClient.isVirtualBackgroundAvailable
         }
         
         socket.on(clientEvent: .disconnect) { data, ack in
@@ -167,9 +179,38 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
         }
         
         socket.on("new user joined") { [weak self] data, ack in
-            self?.webRTCClient.connect(onSuccess: { offerSDP in
+            guard let self = self else { return }
+            
+            // The key must go out before the offer; the server relays both in order on this socket
+            if self.enableE2EE, let key = self.webRTCClient.generateEncryptionKey() {
+                let payload: [String: Any] = ["roomId": self.roomId, "encryptionKey": key]
+                self.socket.emit("send encryption key", payload)
+            }
+            
+            self.webRTCClient.connect(onSuccess: { [weak self] offerSDP in
                 self?.sendSDP(sessionDescription: offerSDP)
             })
+        }
+        
+        socket.on("receive encryption key") { [weak self] data, ack in
+            guard let self = self,
+                  let payload = data.first as? [String: Any],
+                  let key = payload["encryptionKey"] as? Data else {
+                print("invalid encryption key payload")
+                return
+            }
+            
+            guard self.enableE2EE, self.webRTCClient?.setEncryptionKey(key) == true else {
+                print("received encryption key but E2EE is disabled")
+                return
+            }
+            
+            let ackPayload: [String: Any] = ["roomId": self.roomId]
+            self.socket.emit("encryption key received", ackPayload)
+        }
+        
+        socket.on("remote peer received encryption key") { data, ack in
+            print("remote peer received encryption key")
         }
         
         socket.on("offer") { [weak self] data, ack in
@@ -373,10 +414,10 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
         bottomControlsContainer.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bottomControlsContainer)
         
-        // Secondary controls stack (Chat, Share, Speaker)
+        // Secondary controls stack (Chat, Share, Speaker, Background)
         secondaryControlsStack.axis = .horizontal
         secondaryControlsStack.distribution = .equalCentering
-        secondaryControlsStack.spacing = 60
+        secondaryControlsStack.spacing = 32
         secondaryControlsStack.translatesAutoresizingMaskIntoConstraints = false
         bottomControlsContainer.addSubview(secondaryControlsStack)
         
@@ -413,6 +454,18 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
             action: #selector(speakerButtonTapped)
         )
         secondaryControlsStack.addArrangedSubview(speakerContainer)
+        
+        // Virtual background
+        setupSecondaryControl(
+            container: backgroundContainer,
+            button: backgroundButton,
+            label: backgroundLabel,
+            icon: "person.and.background.dotted",
+            title: "Background",
+            action: #selector(backgroundButtonTapped)
+        )
+        backgroundButton.isEnabled = false
+        secondaryControlsStack.addArrangedSubview(backgroundContainer)
         
         // Glass panel for primary controls
         glassPanelView.backgroundColor = UIColor(red: 0.06, green: 0.1, blue: 0.13, alpha: 0.75)
@@ -811,6 +864,23 @@ class CallViewController: UIViewController, WebRTCClientDelegate, UITextFieldDel
             speakerButton.setImage(UIImage(systemName: isSpeakerOn ? "speaker.slash.fill" : "speaker.wave.3.fill", withConfiguration: config), for: .normal)
         } catch {
             print("Failed to toggle speaker: \(error)")
+        }
+    }
+    
+    @objc private func backgroundButtonTapped() {
+        guard let webRTCClient = webRTCClient, webRTCClient.isVirtualBackgroundAvailable else { return }
+        
+        isVirtualBackgroundOn.toggle()
+        webRTCClient.setVirtualBackground(enabled: isVirtualBackgroundOn)
+        
+        backgroundButton.backgroundColor = isVirtualBackgroundOn
+            ? UIColor(red: 0.24, green: 0.51, blue: 0.96, alpha: 1.0)
+            : UIColor(red: 0.06, green: 0.1, blue: 0.13, alpha: 0.75)
+        
+        if isScreenSharing || isVideoFileSharing {
+            showToast(message: isVirtualBackgroundOn ? "Virtual background will apply when the camera is back" : "Virtual background off")
+        } else {
+            showToast(message: isVirtualBackgroundOn ? "Virtual background on" : "Virtual background off")
         }
     }
     
@@ -1263,7 +1333,7 @@ extension CallViewController {
     func didConnectWebRTC() {
         DispatchQueue.main.async {
             self.peersConnected = true
-            self.statusLabel.text = "Connected"
+            self.statusLabel.text = self.enableE2EE ? "Connected · E2EE" : "Connected"
             self.connectionDot.isHidden = false
             
             // Start pulsing animation
