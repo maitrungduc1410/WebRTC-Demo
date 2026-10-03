@@ -66,6 +66,7 @@ The signaling server facilitates the initial peer discovery and exchange of conn
 - `answer` - Send WebRTC answer to peer
 - `new ice candidate` - Exchange ICE candidates
 - `receive encryption key` - Exchange E2EE keys (web, Android, iOS)
+- `media state` - Relay `{audio, video, screen}` so the peer knows when the camera or microphone is off
 - `send data channel message` - Relay data channel messages
 - `leave room` - Leave the current room
 
@@ -146,16 +147,21 @@ App.vue
 **Technology Stack:**
 - Swift
 - WebRTC framework (native)
-- UIKit
+- SwiftUI with Liquid Glass (deployment target iOS 26, Xcode 26)
 - ReplayKit (for screen broadcasting)
 
 **Project Structure:**
 ```
 WebRTCDemo (Main App)
-├── AppDelegate.swift
-├── SceneDelegate.swift
-├── ViewController.swift (Main UI)
-├── CallViewController.swift (Call management)
+├── WebRTCDemoApp.swift (@main app, lobby -> call as a full screen cover)
+├── LobbyView.swift (Room ID, E2EE toggle, signaling server sheet)
+├── SignalingServer.swift (saved server address, normalization)
+├── CallViewModel.swift (@Observable call state, Socket.IO signaling)
+├── CallView.swift (Call screen: remote stage, draggable PiP, overlays, pickers)
+├── CallControls.swift (Glass toolbar, share menu, More sheet)
+├── ChatView.swift (Chat sheet)
+├── PeerPlaceholderView.swift (Blurred last frame + speaking avatar)
+├── VideoView.swift (RTCMTLVideoView wrapper, FrameSnapshotter)
 ├── PeerConnectionClient.swift (WebRTC logic)
 ├── VirtualBackgroundProcessor.swift (Vision + Core Image virtual background)
 ├── RTCCustomFrameCapturer.swift (Custom video capture)
@@ -175,21 +181,25 @@ WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
 
 **Key Components:**
 
-1. **PeerConnectionClient.swift**
+1. **PeerConnectionClient.swift** (`WebRTCClient`)
    - Manages RTCPeerConnection lifecycle
    - Handles ICE candidate generation and exchange
-   - Video/audio track management
+   - Video/audio track management; exposes the local video track and reports the remote one to its delegate
    - Data channel creation and messaging
-   - Camera switching (front/back)
-   - Local and remote video rendering
+   - Camera switching (front/back), remote audio level from `getStats`
+   - Owns no views; delegate callbacks can arrive on any thread
 
-2. **CallViewController.swift**
-   - Main call UI controller
-   - WebSocket connection management
-   - Room joining/leaving logic
-   - UI controls for audio/video/data channel
+2. **CallViewModel.swift**
+   - Socket.IO connection and signaling events, including `media state`
+   - All call state the UI renders, mutated on the main queue only
+   - Camera off: sends `media state` first and disables the track 300 ms later (the reverse when turning on)
 
-3. **Screen Broadcasting**
+3. **CallView.swift and friends**
+   - SwiftUI call screen with Liquid Glass controls
+   - Local video morphs from full screen into a draggable picture-in-picture when the peer joins
+   - Placeholder with the blurred last frame when the peer's video is off or hidden locally
+
+4. **Screen Broadcasting**
    - Uses ReplayKit framework
    - Broadcast Extension for system-level screen capture
    - Separate process for privacy and security
@@ -213,30 +223,32 @@ WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
 - Automatic camera ↔ screen track switching
 
 **Configuration:**
-- Server URL configured in `CallViewController.swift`
-- Minimum deployment target considerations for dependencies
+- Server URL is edited in the lobby and saved in `UserDefaults` (`SignalingServer.swift`); `Info.plist` allows plain HTTP
+- Deployment target iOS 26 for every target (Liquid Glass APIs); the pods keep their own minimums
+- The Xcode project does not use synchronized folders: add new source files to `project.pbxproj` (or through Xcode)
 
 #### 4. Android Client (`android/`)
 
 **Technology Stack:**
 - Kotlin (native Android)
+- Jetpack Compose with Material 3 Expressive (`material3` `1.5.0-alpha18`, Compose BOM `2026.06.01`)
 - WebRTC framework for Android
-- Gradle build system
+- Gradle build system (AGP 8.13.2, Gradle 9.5.1, Kotlin 2.3.0)
 
 **Project Structure:**
 ```
-android/
-├── app/
-│   ├── build.gradle.kts
-│   ├── proguard-rules.pro
-│   └── src/
-│       └── main/
-│           ├── AndroidManifest.xml
-│           ├── java/
-│           └── res/
-├── build.gradle.kts
-├── settings.gradle.kts
-└── gradle/
+android/app/src/main/java/com/example/myapplication/
+├── MainActivity.kt (hosts LobbyScreen)
+├── CallActivity.kt (hosts CallScreen: permissions, pickers, MediaProjection)
+├── ScreenCaptureService.kt (foreground service for screen capture)
+├── call/CallViewModel.kt (call state as StateFlow, owns PeerConnectionClient + EglBase)
+├── settings/SignalingServer.kt (saved server address, normalization)
+├── ui/
+│   ├── lobby/LobbyScreen.kt
+│   ├── call/ (CallScreen, CallControls, ChatSheet, PeerPlaceholder, CallPreviews)
+│   ├── video/ (TextureViewRenderer, VideoRenderer, FrameSnapshotter)
+│   └── theme/Theme.kt (MaterialExpressiveTheme, dynamic color)
+└── webrtc/ (PeerConnectionClient, WebRtcPeer, RtcListener, SignalingHandler, E2eeManager, Mp4VideoCapturer, vbg/)
 ```
 
 **Key Features:**
@@ -244,11 +256,16 @@ android/
 - Camera and microphone access
 - Screen sharing (device screen capture)
 - Data channel messaging
-- Audio/video controls
+- Audio/video controls, local-only peer mute and hide video
+- Draggable rounded picture-in-picture, fit/fill remote video
 
 **Configuration:**
-- Server address configured in `res/values/strings.xml`
+- Server address is edited in the lobby and saved in `SharedPreferences` (`settings/SignalingServer.kt`); the default is in `res/values/strings.xml`
 - Permissions for camera, microphone, and internet in AndroidManifest.xml
+- Icons are Material Symbols vector drawables in `res/drawable/ic_*.xml`
+- Material 3 Expressive is alpha-only; newer Compose BOMs need AGP 9.1 and compileSdk 37
+- Video is rendered with `TextureViewRenderer` (TextureView + EglRenderer) so it can be clipped and animated in Compose; it always center-crops, so `VideoSurface` sizes it to cover the screen at the frame's aspect ratio and animates a scale down for fit
+- `CallContent` is stateless with video slots; `CallPreviews.kt` renders it with fake video for previews and screenshot tests
 
 ## WebRTC Core Concepts
 
@@ -292,6 +309,7 @@ The project uses Google's public STUN server:
 ### Data Channel
 
 - **Use Case**: Text messaging between peers
+- **Setup**: The offerer creates the channel before its first offer; opening chat never renegotiates
 - **Reliability**: Configurable (reliable/unreliable)
 - **Ordering**: Can be ordered or unordered
 - **Low Latency**: Direct P2P, bypasses signaling server
@@ -299,9 +317,9 @@ The project uses Google's public STUN server:
 ## Setup and Installation
 
 ### Prerequisites
-- Node.js and npm/yarn
-- iOS: Xcode, CocoaPods
-- Android: Android Studio, Android SDK
+- Node.js 20.19+ and npm/yarn
+- iOS: Xcode 26, CocoaPods, a device on iOS 26+
+- Android: Android Studio, Android SDK (compileSdk 36), JDK 17+
 - Modern web browser with WebRTC support
 
 ### Quick Start
@@ -320,7 +338,7 @@ The project uses Google's public STUN server:
    npm install
    npm run dev
    ```
-   Available at `http://localhost:5173`
+   Available at `http://localhost:5173`. It connects to port 4000 on the same host; change the address in the lobby if the server runs elsewhere
 
 3. **iOS Setup**
    ```bash
@@ -328,13 +346,11 @@ The project uses Google's public STUN server:
    pod install
    ```
    - Open `WebRTCDemo.xcworkspace` in Xcode
-   - Update `SERVER_URL` in `CallViewController.swift`
-   - Build and run
+   - Build and run, then set the signaling server address in the lobby
 
 4. **Android Setup**
-   - Update `serverAddress` in `android/app/src/main/res/values/strings.xml`
    - Open project in Android Studio
-   - Build and run
+   - Build and run, then set the signaling server address in the lobby
 
 ### Usage Flow
 
@@ -416,7 +432,9 @@ Rooms are temporary and in-memory:
 | Data Channel Messaging    | ✅  | ✅      | ✅  |
 | End-to-End Encryption     | ✅  | ✅      | ✅  |
 | Virtual Background        | ✅  | ✅      | ✅  |
-| Stream Video File         | 🚧  | 🚧      | 🚧  |
+| Stream Video File         | ✅  | ✅      | ✅  |
+| Camera/Mic State to Peer  | ✅  | ✅      | ✅  |
+| Hide Remote Video Locally | ✅  | ✅      | ✅  |
 
 ✅ = Supported | ❌ = Not Supported | 🚧 = In Progress
 

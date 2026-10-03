@@ -138,6 +138,16 @@ io.on("connection", (socket) => {
     }
   });
 
+  // { audio, video, screen }: lets the other peer show a placeholder instead of black frames
+  socket.on("media state", (data) => {
+    data.roomId = data.roomId.toString();
+    const index = rooms.findIndex((room) => room.id === data.roomId);
+
+    if (index > -1) {
+      socket.broadcast.to(data.roomId).emit("media state", { state: data.state });
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("a client disconnected");
     removeUserFromRoom(socket.id);
