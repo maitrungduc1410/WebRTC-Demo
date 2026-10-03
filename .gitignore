@@ -1,1 +1,3 @@
 .DS_Store
+# Raw downloads for tools/prepare_effects.py; only the processed files in effects/ are committed.
+/effects-source/
