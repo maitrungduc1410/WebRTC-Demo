@@ -46,6 +46,9 @@
             android:name=".CallActivity"
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             >
             <!-- The meta-data tag is required if you support API level 15 and lower -->
             <meta-data

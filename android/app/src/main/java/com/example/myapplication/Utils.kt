@@ -1,8 +1,9 @@
 package com.example.myapplication
 
 import android.content.Context
-import android.os.Build
-import android.view.WindowManager
+import android.hardware.display.DisplayManager
+import android.util.DisplayMetrics
+import android.view.Display
 
 object Utils {
     
@@ -11,33 +12,21 @@ object Utils {
         @JvmField val screenHeight: Int
     )
 
+    // DisplayManager works with the application context; WindowManager and Context.display need a visual one.
+    private fun defaultDisplay(context: Context): Display =
+        (context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager).getDisplay(Display.DEFAULT_DISPLAY)
+
     @JvmStatic
     fun getScreenDimentions(context: Context): ScreenDimensions {
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val windowMetrics = windowManager.currentWindowMetrics
-            val bounds = windowMetrics.bounds
-            ScreenDimensions(bounds.width(), bounds.height())
-        } else {
-            @Suppress("DEPRECATION")
-            val displayMetrics = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getRealMetrics(displayMetrics)
-            ScreenDimensions(displayMetrics.widthPixels, displayMetrics.heightPixels)
-        }
+        val displayMetrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        defaultDisplay(context).getRealMetrics(displayMetrics)
+        return ScreenDimensions(displayMetrics.widthPixels, displayMetrics.heightPixels)
     }
 
     @JvmStatic
     fun getFps(context: Context): Int {
-        val refreshRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.display.refreshRate
-        } else {
-            @Suppress("DEPRECATION")
-            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.refreshRate
-        }
+        val refreshRate = defaultDisplay(context).refreshRate
 
         return when {
             refreshRate >= 90 -> 60  // Use 60 FPS for high refresh rate displays

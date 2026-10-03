@@ -2,73 +2,44 @@ package com.example.myapplication
 
 import android.content.Intent
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.WindowManager
-import android.widget.Button
-import android.widget.EditText
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
-import kotlin.random.Random
-import androidx.core.graphics.toColorInt
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.myapplication.call.CallViewModel
+import com.example.myapplication.settings.SignalingServer
+import com.example.myapplication.ui.lobby.LobbyScreen
+import com.example.myapplication.ui.theme.AppTheme
 
-class MainActivity : AppCompatActivity() {
-    
-    companion object {
-        const val EXTRA_MESSAGE = "com.example.webrtcdemoandroid.ROOM_ID"
-        const val EXTRA_E2EE = "com.example.webrtcdemoandroid.E2EE"
-    }
-    
-    private var roomId: String = ""
+class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Hide the action bar
-        supportActionBar?.hide()
-
-        // Set status bar color
-        window.apply {
-            addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-            statusBarColor = "#373f3d".toColorInt()
-        }
-
-        setContentView(R.layout.activity_main)
-
-        val btnJoin = findViewById<Button>(R.id.btnJoin)
-        val btnRandom = findViewById<Button>(R.id.btnRandom)
-        val roomIDText = findViewById<EditText>(R.id.roomIDText)
-        val switchE2ee = findViewById<SwitchCompat>(R.id.switchE2ee)
-
-        roomId = generateRandomString(100000, 999999)
-        roomIDText.setText(roomId)
-
-        btnJoin.setOnClickListener {
-            val intent = Intent(this, CallActivity::class.java).apply {
-                putExtra(EXTRA_MESSAGE, roomId)
-                putExtra(EXTRA_E2EE, switchE2ee.isChecked)
+        val context = this
+        setContent {
+            AppTheme {
+                var serverAddress by remember { mutableStateOf(SignalingServer.load(context)) }
+                LobbyScreen(
+                    serverAddress = serverAddress,
+                    defaultServerAddress = SignalingServer.defaultAddress(context),
+                    onServerAddressChange = { address ->
+                        SignalingServer.save(context, address)
+                        serverAddress = address
+                    },
+                ) { roomId, e2ee ->
+                    startActivity(
+                        Intent(context, CallActivity::class.java)
+                            .putExtra(CallViewModel.EXTRA_ROOM_ID, roomId)
+                            .putExtra(CallViewModel.EXTRA_E2EE, e2ee)
+                            .putExtra(CallViewModel.EXTRA_SERVER_ADDRESS, serverAddress)
+                    )
+                }
             }
-            startActivity(intent)
         }
-
-        btnRandom.setOnClickListener {
-            roomId = generateRandomString(100000, 999999)
-            roomIDText.setText(roomId)
-        }
-
-        roomIDText.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {}
-
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                roomId = s.toString()
-            }
-        })
-    }
-
-    private fun generateRandomString(min: Int, max: Int): String {
-        val random = Random.nextInt(min, max + 1)
-        return random.toString()
     }
 }

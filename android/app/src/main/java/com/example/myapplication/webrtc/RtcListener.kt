@@ -16,4 +16,12 @@ interface RtcListener {
     fun onDataChannelStateChange(state: DataChannel.State)
     fun onPeersConnectionStatusChange(success: Boolean)
     fun onScreenSharingStopped() // Called when MediaProjection is stopped by system
+    fun onRemoteMediaState(state: MediaState)
 }
+
+/** What a peer is currently sending; `screen` is true for screen or video file sharing. */
+data class MediaState(
+    val audio: Boolean = true,
+    val video: Boolean = true,
+    val screen: Boolean = false
+)

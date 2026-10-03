@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.camera2.CameraManager
 import android.media.projection.MediaProjection
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.example.myapplication.R
 import com.example.myapplication.Utils
@@ -22,11 +24,23 @@ import java.net.URISyntaxException
 class PeerConnectionClient(
     private val context: Context,
     private val roomId: String,
-    private val listener: RtcListener,
+    private val callbacks: RtcListener,
     host: String,
     private val rootEglBase: EglBase,
     private val e2eeEnabled: Boolean = false
 ) {
+    // Re-announces the local media state whenever a peer (re)connects.
+    private val listener = object : RtcListener by callbacks {
+        override fun onPeersConnectionStatusChange(success: Boolean) {
+            if (success) sendMediaState()
+            callbacks.onPeersConnectionStatusChange(success)
+        }
+    }
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var localAudioEnabled = true
+    private var localVideoEnabled = true
+    private var sharingContent = false
+
     private var factory: PeerConnectionFactory? = null
     private val pcConstraints = MediaConstraints()
     private var localStream: MediaStream? = null
@@ -36,6 +50,8 @@ class PeerConnectionClient(
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private lateinit var socket: Socket
     private lateinit var signalingHandler: SignalingHandler
+    // Replaced from socket threads, used from the UI thread
+    @Volatile
     private var peer: WebRtcPeer? = null
     private var useFrontCamera = true
     // Written on the UI thread, read when a peer is created from a socket callback
@@ -51,6 +67,9 @@ class PeerConnectionClient(
 
     companion object {
         private const val TAG = "PeerConnectionClient"
+
+        // Lets the remote swap to its placeholder before our track turns into black frames.
+        private const val MEDIA_STATE_DELAY_MS = 300L
     }
 
     init {
@@ -103,39 +122,63 @@ class PeerConnectionClient(
             socket = socket,
             roomId = roomId,
             onPeerCreated = { createPeer() },
-            getPeer = { peer },
+            // A peer disposes itself when ICE disconnects; a later offer must start a new one.
+            getPeer = { peer?.takeUnless { it.isDisposed } },
+            onReconnected = { dropPeer() },
+            onRemoteMediaState = { listener.onRemoteMediaState(it) },
             e2ee = e2ee
         )
 
         signalingHandler.setupListeners()
-        socket.connect()
     }
 
     private fun createPeer(): WebRtcPeer {
+        // "new user joined" or an offer for a new call while one exists: the remote restarted it.
+        dropPeer()
         peer = WebRtcPeer(
             factory = factory!!,
             localStream = localStream!!,
             pcConstraints = pcConstraints,
             listener = listener,
             signalingHandler = signalingHandler,
+            dataChannelLabel = context.getString(R.string.dataChannelName),
             e2ee = e2ee,
             remoteAudioEnabled = remoteAudioEnabled
         )
         return peer!!
     }
 
-    // ========== Public API ==========
-
-    fun start() {
-        setupCamera()
+    /** Ends the current call but keeps local media running. */
+    private fun dropPeer() {
+        val old = peer ?: return
+        peer = null
+        if (old.isDisposed) return
+        old.dispose()
+        listener.onRemoveRemoteStream()
+        listener.onPeersConnectionStatusChange(false)
     }
 
-    fun switchCamera() {
+    // ========== Public API ==========
+
+    /**
+     * Creates the local media, then joins the room. The order matters: a peer already in the room
+     * sends its offer as soon as we join, and answering it needs [localStream].
+     */
+    fun start() {
+        setupCamera()
+        socket.connect()
+    }
+
+    val isFrontCamera: Boolean get() = useFrontCamera
+
+    /** [onDone] runs on the camera thread with the new facing. */
+    fun switchCamera(onDone: (isFrontCamera: Boolean) -> Unit = {}) {
         if (videoSource != null && videoCapturer?.isScreencast == false) {
             val cameraVideoCapturer = videoCapturer as CameraVideoCapturer
             cameraVideoCapturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
                 override fun onCameraSwitchDone(isFrontCamera: Boolean) {
                     useFrontCamera = isFrontCamera
+                    onDone(isFrontCamera)
                 }
 
                 override fun onCameraSwitchError(errorDescription: String) {
@@ -146,11 +189,38 @@ class PeerConnectionClient(
     }
 
     fun toggleAudio(enable: Boolean) {
+        localAudioEnabled = enable
         localStream?.audioTracks?.firstOrNull()?.setEnabled(enable)
+        sendMediaState()
     }
 
     fun toggleVideo(enable: Boolean) {
-        localStream?.videoTracks?.firstOrNull()?.setEnabled(enable)
+        localVideoEnabled = enable
+        mainHandler.removeCallbacksAndMessages(null)
+        if (enable) {
+            localStream?.videoTracks?.firstOrNull()?.setEnabled(true)
+            mainHandler.postDelayed({ sendMediaState() }, MEDIA_STATE_DELAY_MS)
+        } else {
+            sendMediaState()
+            mainHandler.postDelayed({
+                if (!localVideoEnabled) localStream?.videoTracks?.firstOrNull()?.setEnabled(false)
+            }, MEDIA_STATE_DELAY_MS)
+        }
+    }
+
+    /** Reads the remote `audioLevel` (0..1) from the inbound audio RTP stats. */
+    fun getRemoteAudioLevel(callback: (Float) -> Unit) {
+        val peer = peer ?: return
+        peer.getStats { report ->
+            val level = report.statsMap.values
+                .firstOrNull { it.type == "inbound-rtp" && it.members["kind"] == "audio" }
+                ?.members?.get("audioLevel") as? Double
+            callback((level ?: 0.0).toFloat())
+        }
+    }
+
+    private fun sendMediaState() {
+        signalingHandler.sendMediaState(MediaState(localAudioEnabled, localVideoEnabled, sharingContent))
     }
 
     fun toggleRemoteAudio(enable: Boolean) {
@@ -158,8 +228,9 @@ class PeerConnectionClient(
         peer?.setRemoteAudioEnabled(enable)
     }
 
-    fun createDataChannel(dataChannelName: String) {
-        peer?.createDataChannel(dataChannelName)
+    /** Usually a no-op: the offerer creates the chat channel with the first offer. */
+    fun ensureDataChannel() {
+        peer?.ensureDataChannel()
     }
 
     fun sendDataChannelMessage(message: String) {
@@ -200,16 +271,19 @@ class PeerConnectionClient(
         Log.d(TAG, "Starting file capture: $videoFilePath")
         videoCapturer!!.startCapture(1280, 720, 30) // These will be overridden by the actual video
 
+        sharingContent = true
+        sendMediaState()
         Log.d(TAG, "createFileCapture completed")
     }
 
+    /**
+     * Switches the outgoing video between the camera and the screen. The new track replaces the old
+     * one on the existing sender instead of renegotiating: a renegotiation recreates the video
+     * decoders on both sides, which leaves the remote video frozen on Android. Audio is untouched.
+     */
     fun createDeviceCapture(isScreencast: Boolean, mediaProjectionPermissionResultData: Intent?) {
         Log.d(TAG, "createDeviceCapture: isScreencast=$isScreencast")
 
-        // Remove old tracks from peer connection first
-        peer?.getSenders()?.forEach { peer?.removeTrack(it) }
-
-        // Stop and dispose old capturer
         videoCapturer?.let {
             try {
                 Log.d(TAG, "Stopping old capturer")
@@ -221,24 +295,15 @@ class PeerConnectionClient(
             videoCapturer = null
             Log.d(TAG, "Old capturer disposed")
         }
+        detachVirtualBackground()
+        surfaceTextureHelper?.dispose()
 
-        // Remove tracks from local stream
-        localStream?.videoTracks?.forEach { localStream?.removeTrack(it) }
-        localStream?.audioTracks?.forEach { localStream?.removeTrack(it) }
-
-        // Cleanup media resources BEFORE creating new ones
-        cleanupMediaResources()
-
-        localStream?.let { listener.onRemoveLocalStream(it) }
-
-        // Get dimensions first (before creating capturer for camera case)
         val (width, height, fps) = if (isScreencast) {
             getScreenCaptureDimensions()
         } else {
             getCameraCaptureDimensions()
         }
 
-        // Create new capturer
         videoCapturer = if (isScreencast) {
             ScreenCapturerAndroid(
                 mediaProjectionPermissionResultData,
@@ -254,39 +319,50 @@ class PeerConnectionClient(
             getVideoCapturer()
         }
 
-        // Create new media sources
+        // A new source, because only a screencast source adapts by frame rate instead of resolution.
+        val oldSource = videoSource
         videoSource = factory!!.createVideoSource(videoCapturer!!.isScreencast)
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
-
         if (!isScreencast) attachVirtualBackground()
-
-        // Initialize the new capturer
         videoCapturer!!.initialize(surfaceTextureHelper, context, videoSource!!.capturerObserver)
-
-        // Start capture with determined dimensions
         Log.d(TAG, "Starting capture: ${width}x$height @ ${fps}fps")
         videoCapturer!!.startCapture(width, height, fps)
 
-        // Create and add new tracks
         val videoTrack = factory!!.createVideoTrack("LOCAL_MS_VS", videoSource)
-        localStream!!.addTrack(videoTrack)
+        videoTrack.setEnabled(localVideoEnabled)
+        val replaced = peer?.takeUnless { it.isDisposed }?.replaceVideoTrack(videoTrack) ?: true
+        if (!replaced) Log.w(TAG, "No video sender to replace the track on")
 
-        audioSource = factory!!.createAudioSource(MediaConstraints())
-        val audioTrack = factory!!.createAudioTrack("LOCAL_MS_AT", audioSource)
-        localStream!!.addTrack(audioTrack)
+        val stream = localStream!!
+        val oldTrack = stream.videoTracks.firstOrNull()
+        listener.onRemoveLocalStream(stream)
+        oldTrack?.let { stream.removeTrack(it) }
+        stream.addTrack(videoTrack)
+        listener.onAddLocalStream(stream)
 
-        // Add tracks to existing peer connection
-        peer?.let { p ->
-            p.addTrack(audioTrack)
-            p.addTrack(videoTrack)
-            p.createOffer()
+        // A sender that still holds the old track must keep it alive.
+        if (replaced) {
+            oldTrack?.dispose()
+            oldSource?.dispose()
         }
 
-        localStream?.let { listener.onAddLocalStream(it) }
+        sharingContent = isScreencast
+        sendMediaState()
         Log.d(TAG, "createDeviceCapture completed")
     }
 
+    /**
+     * A screen share keeps the size it started with, so after a rotation the peer would get the
+     * new screen letterboxed inside the old frame. Resizes the virtual display to match.
+     */
+    fun onDisplayChanged() {
+        val capturer = videoCapturer as? ScreenCapturerAndroid ?: return
+        val (width, height, fps) = getScreenCaptureDimensions()
+        capturer.changeCaptureFormat(width, height, fps)
+    }
+
     fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
         signalingHandler.disconnect()
 
         Log.d(TAG, "Stopping capture.")

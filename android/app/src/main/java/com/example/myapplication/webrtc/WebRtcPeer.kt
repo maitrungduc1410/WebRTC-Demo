@@ -14,11 +14,12 @@ class WebRtcPeer(
     private val pcConstraints: MediaConstraints,
     private val listener: RtcListener,
     private val signalingHandler: SignalingHandler,
+    private val dataChannelLabel: String,
     private val e2ee: E2eeManager? = null,
     private var remoteAudioEnabled: Boolean = true
 ) : SdpObserver, PeerConnection.Observer, DataChannel.Observer {
 
-    val peerConnection: PeerConnection
+    private val peerConnection: PeerConnection
     private var dataChannel: DataChannel? = null
     private var disposed = false
 
@@ -54,32 +55,53 @@ class WebRtcPeer(
 
     // ========== Public Methods ==========
 
+    /** Any call on the native PeerConnection after [dispose] crashes the process (SIGBUS). */
+    val isDisposed: Boolean get() = synchronized(this) { disposed }
+
+    /**
+     * The chat channel is created with the first offer. Adding it later means a renegotiation,
+     * and a renegotiation that changes the receive parameters recreates the remote video decoder,
+     * which has frozen the remote video on Android.
+     */
     fun createOffer() {
+        if (isDisposed) return
+        if (dataChannel == null) openDataChannel()
         applyE2eeCodecPreferences()
         peerConnection.createOffer(this, pcConstraints)
     }
 
     fun createAnswer() {
+        if (isDisposed) return
         applyE2eeCodecPreferences()
         peerConnection.createAnswer(this, pcConstraints)
     }
 
     fun setRemoteDescription(sdp: SessionDescription) {
+        if (isDisposed) return
         peerConnection.setRemoteDescription(this, sdp)
     }
 
     fun addIceCandidate(candidate: IceCandidate) {
+        if (isDisposed) return
         if (peerConnection.remoteDescription != null) {
             peerConnection.addIceCandidate(candidate)
         }
     }
 
-    fun createDataChannel(channelName: String) {
-        Log.d(TAG, "Creating data channel: $channelName")
-        val init = DataChannel.Init()
-        dataChannel = peerConnection.createDataChannel(channelName, init)
-        dataChannel?.registerObserver(this)
+    /** Only needed when the remote offered without a data channel (older clients): add one and renegotiate. */
+    fun ensureDataChannel() {
+        if (isDisposed) return
+        val current = dataChannel
+        if (current != null && current.state() != DataChannel.State.CLOSED) return
+        current?.unregisterObserver()
+        dataChannel = null
         createOffer()
+    }
+
+    private fun openDataChannel() {
+        Log.d(TAG, "Creating data channel: $dataChannelLabel")
+        dataChannel = peerConnection.createDataChannel(dataChannelLabel, DataChannel.Init())
+        dataChannel?.registerObserver(this)
     }
 
     fun sendDataChannelMessage(message: String) {
@@ -91,16 +113,14 @@ class WebRtcPeer(
     }
 
     fun addTrack(track: MediaStreamTrack) {
+        if (isDisposed) return
         val sender = peerConnection.addTrack(track, listOf("ARDAMS"))
         if (sender != null) attachSenderCryptor(sender)
     }
 
-    fun removeTrack(sender: RtpSender) {
-        peerConnection.removeTrack(sender)
-    }
-
-    fun getSenders(): List<RtpSender> {
-        return peerConnection.senders
+    fun getStats(callback: RTCStatsCollectorCallback) {
+        if (isDisposed) return
+        peerConnection.getStats(callback)
     }
     
     /** Only mutes local playout; the remote peer is not notified. */
@@ -113,10 +133,13 @@ class WebRtcPeer(
         tracks.forEach { it.setEnabled(enabled) }
     }
 
-    fun replaceVideoTrack(newTrack: VideoTrack) {
-        val senders = peerConnection.senders
-        val videoSender = senders.find { it.track()?.kind() == "video" }
-        videoSender?.setTrack(newTrack, true)
+    /** Sends [track] instead of the current video, without a renegotiation. False when there is no video sender. */
+    fun replaceVideoTrack(track: VideoTrack): Boolean {
+        if (isDisposed) return false
+        val sender = peerConnection.transceivers
+            .firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO && !it.isStopped }
+            ?.sender ?: return false
+        return sender.setTrack(track, false)
     }
 
     fun dispose() {

@@ -15,11 +15,16 @@ class SignalingHandler(
     private val roomId: String,
     private val onPeerCreated: () -> WebRtcPeer,
     private val getPeer: () -> WebRtcPeer?,
+    private val onReconnected: () -> Unit,
+    private val onRemoteMediaState: (MediaState) -> Unit,
     private val e2ee: E2eeManager? = null
 ) {
     companion object {
         private const val TAG = "SignalingHandler"
     }
+
+    @Volatile
+    private var connectedBefore = false
 
     fun setupListeners() {
         socket.on(Socket.EVENT_CONNECT, onConnect)
@@ -29,10 +34,18 @@ class SignalingHandler(
         socket.on("new ice candidate", onNewIceCandidate)
         socket.on("receive encryption key", onReceiveEncryptionKey)
         socket.on("remote peer received encryption key", onRemotePeerReceivedEncryptionKey)
+        socket.on("media state", onMediaState)
         socket.on(Socket.EVENT_DISCONNECT, onDisconnect)
     }
 
     private val onConnect = io.socket.emitter.Emitter.Listener {
+        // The server dropped us from the room while we were offline; the peer still in it
+        // starts a new call once we rejoin, so the old one has to go.
+        if (connectedBefore) {
+            Log.d(TAG, "Socket reconnected, rejoining the room")
+            onReconnected()
+        }
+        connectedBefore = true
         val obj = JSONObject()
         try {
             obj.put("roomId", roomId)
@@ -74,6 +87,33 @@ class SignalingHandler(
 
     private val onRemotePeerReceivedEncryptionKey = io.socket.emitter.Emitter.Listener {
         Log.d(TAG, "Remote peer received encryption key")
+    }
+
+    private val onMediaState = io.socket.emitter.Emitter.Listener { args ->
+        val state = (args.getOrNull(0) as? JSONObject)?.optJSONObject("state") ?: return@Listener
+        onRemoteMediaState(
+            MediaState(
+                audio = state.optBoolean("audio", true),
+                video = state.optBoolean("video", true),
+                screen = state.optBoolean("screen", false)
+            )
+        )
+    }
+
+    fun sendMediaState(state: MediaState) {
+        try {
+            val payload = JSONObject().apply {
+                put("roomId", roomId)
+                put("state", JSONObject().apply {
+                    put("audio", state.audio)
+                    put("video", state.video)
+                    put("screen", state.screen)
+                })
+            }
+            socket.emit("media state", payload)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     /** Binary attachments arrive as ByteArray; a JSON number array is accepted as a fallback. */
@@ -155,6 +195,7 @@ class SignalingHandler(
     }
 
     private fun sendSdp(sdp: SessionDescription, type: String) {
+        if (dropWhileOffline(type)) return
         try {
             val payload = JSONObject()
             val desc = JSONObject().apply {
@@ -172,6 +213,7 @@ class SignalingHandler(
     }
 
     fun sendIceCandidate(candidate: IceCandidate) {
+        if (dropWhileOffline("new ice candidate")) return
         try {
             val payload = JSONObject()
             val iceCandidate = JSONObject().apply {
@@ -189,6 +231,16 @@ class SignalingHandler(
         }
     }
 
+    /**
+     * socket.io buffers emits while offline and flushes them on reconnect, before we rejoin. They
+     * belong to a call that the reconnect ends, and would reach the remote's new call.
+     */
+    private fun dropWhileOffline(event: String): Boolean {
+        if (socket.connected()) return false
+        Log.w(TAG, "Socket offline, dropping $event")
+        return true
+    }
+
     fun disconnect() {
         socket.off(Socket.EVENT_CONNECT, onConnect)
         socket.off("new user joined", onNewUserJoined)
@@ -197,6 +249,7 @@ class SignalingHandler(
         socket.off("new ice candidate", onNewIceCandidate)
         socket.off("receive encryption key", onReceiveEncryptionKey)
         socket.off("remote peer received encryption key", onRemotePeerReceivedEncryptionKey)
+        socket.off("media state", onMediaState)
         socket.off(Socket.EVENT_DISCONNECT, onDisconnect)
         socket.close()
     }
