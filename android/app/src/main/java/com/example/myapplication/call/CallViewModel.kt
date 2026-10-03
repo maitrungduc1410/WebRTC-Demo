@@ -13,13 +13,19 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.effects.BackgroundKind
+import com.example.myapplication.effects.EffectsCatalog
+import com.example.myapplication.effects.EffectsSelection
+import com.example.myapplication.effects.EffectsStore
 import com.example.myapplication.settings.SignalingServer
 import com.example.myapplication.ScreenCaptureService
 import com.example.myapplication.webrtc.MediaState
 import com.example.myapplication.webrtc.PeerConnectionClient
 import com.example.myapplication.webrtc.RtcListener
+import com.example.myapplication.webrtc.effects.EffectsScene
 import com.example.myapplication.ui.video.FrameSnapshotter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +51,8 @@ enum class Sharing { None, Screen, File }
 
 enum class ChatStatus { Closed, Opening, Open }
 
+enum class EffectsStatus { Off, Loading, On }
+
 data class ChatMessage(
     val id: Long,
     val text: String,
@@ -65,7 +73,9 @@ data class CallUiState(
     val remoteVideoHidden: Boolean = false,
     val remote: MediaState = MediaState(),
     val sharing: Sharing = Sharing.None,
-    val virtualBackground: Boolean = false,
+    /** The chosen background and sticker; [effectsStatus] says whether they are showing yet. */
+    val effects: EffectsSelection = EffectsSelection(),
+    val effectsStatus: EffectsStatus = EffectsStatus.Off,
     val chat: ChatStatus = ChatStatus.Closed,
     val messages: List<ChatMessage> = emptyList(),
     val unread: Int = 0
@@ -115,6 +125,11 @@ class CallViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     private val audioManager = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val client = PeerConnectionClient(app, roomId, this, serverAddress, eglBase, e2ee)
 
+    val effectsCatalog: EffectsCatalog = EffectsCatalog.load(app)
+    /** What the camera currently shows; [CallUiState.effects] runs ahead of it while assets load. */
+    private var appliedEffects = EffectsSelection()
+    private var effectsJob: Job? = null
+
     private var started = false
     private var inForeground = true
     private var needsCameraRestart = false
@@ -124,6 +139,13 @@ class CallViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     init {
         ScreenCaptureService.peerConnectionClientRef = WeakReference(client)
         pollRemoteAudioLevel()
+        val saved = EffectsStore.load(app, effectsCatalog)
+        if (effectsCatalog.hasEffects(saved)) {
+            // Nothing is shown or sent until the saved background is ready.
+            client.holdEffects()
+            _ui.update { it.copy(effects = saved) }
+            applyEffects()
+        }
     }
 
     // ========== Actions ==========
@@ -199,10 +221,53 @@ class CallViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         if (FrameSnapshotter.isUsable(bitmap)) _remoteSnapshot.value = bitmap
     }
 
-    fun toggleVirtualBackground() {
-        val on = !_ui.value.virtualBackground
-        client.toggleVirtualBackground(on)
-        _ui.update { it.copy(virtualBackground = on) }
+    fun setEffects(selection: EffectsSelection) {
+        _ui.update { it.copy(effects = selection) }
+        EffectsStore.save(getApplication(), selection)
+        applyEffects()
+    }
+
+    /** Brings the camera in line with the chosen effects; a newer choice cancels an older one. */
+    private fun applyEffects() {
+        val selection = _ui.value.effects
+        effectsJob?.cancel()
+        if (!effectsCatalog.hasEffects(selection)) {
+            client.setEffects(null)
+            appliedEffects = selection
+            _ui.update { it.copy(effectsStatus = EffectsStatus.Off) }
+            return
+        }
+        _ui.update { it.copy(effectsStatus = EffectsStatus.Loading) }
+        effectsJob = viewModelScope.launch {
+            val scene = withContext(Dispatchers.IO) { loadScene(selection) }
+            // A newer choice owns the camera now.
+            if (_ui.value.effects != selection) return@launch
+            if (scene != null) {
+                client.setEffects(scene)
+                appliedEffects = selection
+                _ui.update { it.copy(effectsStatus = EffectsStatus.On) }
+                return@launch
+            }
+            _events.tryEmit("Couldn't load that effect")
+            // Back to whatever was showing before; this also releases frames held at start.
+            val previous = appliedEffects.takeIf { it != selection } ?: EffectsSelection()
+            EffectsStore.save(getApplication(), previous)
+            _ui.update { it.copy(effects = previous) }
+            applyEffects()
+        }
+    }
+
+    private fun loadScene(selection: EffectsSelection): EffectsScene? {
+        val app = getApplication<Application>()
+        val background = effectsCatalog.background(selection.background)
+        val sticker = effectsCatalog.sticker(selection.sticker)
+        val picture = if (background.kind == BackgroundKind.Image) {
+            EffectsCatalog.decode(app, background.file ?: return null, maxSide = 1920) ?: return null
+        } else {
+            null
+        }
+        val stickerBitmap = sticker?.let { EffectsCatalog.decode(app, it.file, maxSide = 512) ?: return null }
+        return EffectsScene(background, picture, sticker, stickerBitmap)
     }
 
     fun startScreenShare(projectionData: Intent) {
@@ -351,6 +416,11 @@ class CallViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                 needsCameraRestart = true
             }
         }
+    }
+
+    override fun onEffectsFailed() {
+        _events.tryEmit("Effects stopped working on this device")
+        setEffects(EffectsSelection())
     }
 
     override fun onRemoteMediaState(state: MediaState) {

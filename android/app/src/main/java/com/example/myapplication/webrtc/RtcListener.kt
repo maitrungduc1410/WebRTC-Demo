@@ -17,6 +17,8 @@ interface RtcListener {
     fun onPeersConnectionStatusChange(success: Boolean)
     fun onScreenSharingStopped() // Called when MediaProjection is stopped by system
     fun onRemoteMediaState(state: MediaState)
+    /** A model the current effect needs could not run; camera frames are dropped until effects change. */
+    fun onEffectsFailed() {}
 }
 
 /** What a peer is currently sending; `screen` is true for screen or video file sharing. */

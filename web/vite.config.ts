@@ -20,4 +20,10 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  server: {
+    fs: {
+      // The backgrounds and stickers live in ../effects, shared with the mobile apps.
+      allow: [fileURLToPath(new URL(".", import.meta.url)), fileURLToPath(new URL("../effects", import.meta.url))],
+    },
+  },
 });

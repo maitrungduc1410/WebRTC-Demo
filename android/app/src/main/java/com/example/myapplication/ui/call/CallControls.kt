@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.example.myapplication.R
 import com.example.myapplication.call.CallUiState
 import com.example.myapplication.call.ConnectionPhase
+import com.example.myapplication.call.EffectsStatus
 import com.example.myapplication.call.Sharing
 
 private val HangUpRed = Color(0xFFE5484D)
@@ -155,7 +156,7 @@ fun MoreSheet(
     onToggleSpeaker: () -> Unit,
     onToggleRemoteAudio: () -> Unit,
     onToggleRemoteVideo: () -> Unit,
-    onToggleVirtualBackground: () -> Unit,
+    onOpenEffects: () -> Unit,
     onToggleFit: () -> Unit,
     onSwitchCamera: () -> Unit
 ) {
@@ -180,10 +181,11 @@ fun MoreSheet(
                     modifier = Modifier.weight(1f)
                 )
                 OptionTile(
-                    icon = R.drawable.ic_background_replace,
-                    label = "Virtual background",
-                    checked = ui.virtualBackground,
-                    onClick = onToggleVirtualBackground,
+                    icon = R.drawable.ic_auto_awesome,
+                    label = "Backgrounds and effects",
+                    checked = ui.effectsStatus == EffectsStatus.On,
+                    enabled = ui.sharing == Sharing.None,
+                    onClick = onOpenEffects,
                     modifier = Modifier.weight(1f)
                 )
             }

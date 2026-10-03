@@ -12,6 +12,7 @@ import { useCoarsePointer, useCompactLayout, useWideLayout } from '@/composables
 import { cn } from '@/lib/utils'
 import CallToolbar from './CallToolbar.vue'
 import ChatPanel from './ChatPanel.vue'
+import EffectsPanel from './EffectsPanel.vue'
 import LocalTile from './LocalTile.vue'
 import MoreDrawer from './MoreDrawer.vue'
 import PeerPlaceholder from './PeerPlaceholder.vue'
@@ -42,6 +43,7 @@ const hasRemote = computed(() => call.phase.value === 'connected')
 
 const chatOpen = ref(false)
 const moreOpen = ref(false)
+const effectsOpen = ref(false)
 const unread = ref(0)
 
 watch(() => call.messages.value.length, (length, previous) => {
@@ -70,7 +72,7 @@ function scheduleHide() {
   hideTimer = null
   if (!hasRemote.value) return
   hideTimer = setTimeout(() => {
-    if (menuOpen() || moreOpen.value || (chatOpen.value && !wide.value)) return scheduleHide()
+    if (menuOpen() || moreOpen.value || effectsOpen.value || (chatOpen.value && !wide.value)) return scheduleHide()
     controlsVisible.value = false
   }, CONTROLS_AUTO_HIDE_MS)
 }
@@ -90,6 +92,8 @@ onBeforeUnmount(() => {
 })
 // The More drawer only exists in the compact layout; left open it would keep the controls up.
 watch(compact, isCompact => { if (!isCompact) moreOpen.value = false })
+// Effects only apply to the camera.
+watch(() => call.sharing.value, sharing => { if (sharing !== 'none') effectsOpen.value = false })
 
 function onPointerMove(event: PointerEvent) {
   if (event.pointerType === 'mouse') wake()
@@ -152,6 +156,12 @@ async function switchCamera() {
   else await call.switchCamera()
 }
 
+function openEffects() {
+  if (call.sharing.value !== 'none') return
+  moreOpen.value = false
+  effectsOpen.value = true
+}
+
 function pickFile() {
   fileInput.value?.click()
 }
@@ -190,7 +200,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     m: call.toggleMic,
     v: call.toggleCamera,
     c: () => { chatOpen.value = !chatOpen.value },
-    b: call.toggleBackground,
+    b: openEffects,
     f: () => hasRemote.value && toggleFit(),
     p: () => hasRemote.value && pip.supported && pip.toggle(),
   }
@@ -349,6 +359,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
               :pip-active="pip.active.value"
               @toggle-chat="chatOpen = !chatOpen"
               @open-more="moreOpen = true"
+              @open-effects="openEffects"
               @pick-file="pickFile"
               @toggle-fit="toggleFit"
               @toggle-pip="pip.toggle"
@@ -430,7 +441,10 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       @toggle-fit="toggleFit"
       @toggle-pip="pip.toggle"
       @switch-camera="switchCamera"
+      @open-effects="openEffects"
     />
+
+    <EffectsPanel v-model:open="effectsOpen" :call="call" :compact="compact" />
 
     <input ref="fileInput" type="file" accept="video/*" class="hidden" @change="onFilePicked">
     <audio ref="remoteAudio" autoplay />

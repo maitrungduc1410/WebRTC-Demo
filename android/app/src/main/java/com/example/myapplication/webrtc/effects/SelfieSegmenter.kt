@@ -1,4 +1,4 @@
-package com.example.myapplication.webrtc.vbg
+package com.example.myapplication.webrtc.effects
 
 import android.content.Context
 import android.os.Handler
@@ -36,12 +36,15 @@ class SelfieSegmenter(
 
     class Mask(val width: Int, val height: Int, val data: ByteBuffer)
 
-    private val thread = HandlerThread("VirtualBgInference").apply { start() }
+    private val thread = HandlerThread("SegmenterInference").apply { start() }
     private val handler = Handler(thread.looper)
     private val busy = AtomicBoolean(false)
     private var segmenter: ImageSegmenter? = null
+    private var input: ByteBuffer? = null
+
     @Volatile
-    private var initFailed = false
+    var failed = false
+        private set
     private var lastTimestampMs = 0L
     private var smoothed: FloatArray? = null
     private var loggedMaskCount = false
@@ -52,6 +55,9 @@ class SelfieSegmenter(
     private val maskLock = Any()
     private var latestMask: Mask? = null
     private var maskVersion = 0L
+    // Bumped by resetMask; results from frames submitted before it are dropped.
+    @Volatile
+    private var epoch = 0
 
     init {
         handler.post { segmenter = createSegmenter() }
@@ -59,15 +65,19 @@ class SelfieSegmenter(
 
     val isBusy: Boolean get() = busy.get()
 
-    /**
-     * Queues [rgba] (width * height * 4 bytes) for inference. Returns false if an inference is
-     * already running; the caller keeps ownership of the buffer only in that case.
-     */
+    /** Copies [rgba] (width * height * 4 bytes) and queues it. Returns false while one is running. */
     fun submit(rgba: ByteBuffer, width: Int, height: Int): Boolean {
-        if (released || initFailed || !busy.compareAndSet(false, true)) return false
+        if (released || failed || !busy.compareAndSet(false, true)) return false
+        val size = width * height * 4
+        val copy = input?.takeIf { it.capacity() == size }
+            ?: ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder()).also { input = it }
+        rgba.rewind()
+        copy.rewind()
+        copy.put(rgba)
+        val submitted = epoch
         val posted = handler.post {
             try {
-                runInference(rgba, width, height)
+                runInference(copy, width, height, submitted)
             } finally {
                 busy.set(false)
             }
@@ -83,13 +93,12 @@ class SelfieSegmenter(
     }
 
     fun resetMask() {
-        handler.post {
-            smoothed = null
-            synchronized(maskLock) {
-                latestMask = null
-                maskVersion++
-            }
+        synchronized(maskLock) {
+            epoch++
+            latestMask = null
+            maskVersion++
         }
+        handler.post { smoothed = null }
     }
 
     fun release() {
@@ -113,7 +122,7 @@ class SelfieSegmenter(
             buildSegmenter(Delegate.CPU).also { Log.d(TAG, "Using CPU delegate") }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create ImageSegmenter", e)
-            initFailed = true
+            failed = true
             null
         }
     }
@@ -132,7 +141,7 @@ class SelfieSegmenter(
         return ImageSegmenter.createFromOptions(context, options)
     }
 
-    private fun runInference(rgba: ByteBuffer, width: Int, height: Int) {
+    private fun runInference(rgba: ByteBuffer, width: Int, height: Int, submitted: Int) {
         val segmenter = segmenter ?: return
         // VIDEO mode requires strictly increasing timestamps.
         val timestampMs = maxOf(SystemClock.elapsedRealtime(), lastTimestampMs + 1)
@@ -150,7 +159,7 @@ class SelfieSegmenter(
             // Class 0 of selfie_segmenter is the person (the category mask reports 0 for person pixels).
             val personMask = masks.firstOrNull() ?: return
             try {
-                publish(personMask)
+                if (submitted == epoch) publish(personMask, submitted)
             } finally {
                 masks.forEach { it.close() }
             }
@@ -161,7 +170,7 @@ class SelfieSegmenter(
         }
     }
 
-    private fun publish(mask: MPImage) {
+    private fun publish(mask: MPImage, submitted: Int) {
         val w = mask.width
         val h = mask.height
         val floats = ByteBufferExtractor.extract(mask)
@@ -183,6 +192,7 @@ class SelfieSegmenter(
             out.put(i, (v.coerceIn(0f, 1f) * 255f + 0.5f).toInt().toByte())
         }
         synchronized(maskLock) {
+            if (submitted != epoch) return
             latestMask = Mask(w, h, out)
             maskVersion++
         }

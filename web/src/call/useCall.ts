@@ -9,8 +9,17 @@ import {
   type CodecMap,
   type MediaKind,
 } from '@/e2ee'
+import {
+  findBackground,
+  findSticker,
+  hasEffects,
+  loadSelection,
+  NO_EFFECTS,
+  saveSelection,
+  type EffectsSelection,
+} from '@/effects/catalog'
+import type { EffectsProcessor } from '@/effects/EffectsProcessor'
 import { loadServerUrl, normalizeServerUrl, saveServerUrl } from './serverUrl'
-import type { BackgroundProcessor } from './virtualBackground'
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 const DATA_CHANNEL_LABEL = 'MyApp Channel'
@@ -21,7 +30,7 @@ const USE_ENCRYPTION_WORKER = true
 
 export type Phase = 'idle' | 'waiting' | 'connecting' | 'connected'
 export type Sharing = 'none' | 'screen' | 'file'
-export type BackgroundState = 'off' | 'loading' | 'on'
+export type EffectsStatus = 'off' | 'loading' | 'on'
 export type ServerStatus = 'connecting' | 'connected' | 'unreachable'
 
 /** What the remote peer says it is sending ("media state" event); screen = screen or file sharing */
@@ -65,7 +74,9 @@ function createCall() {
   /** Local only, the remote is not notified */
   const remoteVideoHidden = ref(false)
   const sharing = ref<Sharing>('none')
-  const background = ref<BackgroundState>('off')
+  /** The chosen background and sticker; remembered across calls. */
+  const effects = ref<EffectsSelection>(loadSelection())
+  const effectsStatus = ref<EffectsStatus>('off')
   const mirrorLocal = ref(true)
   const cameraCount = ref(0)
 
@@ -119,7 +130,11 @@ function createCall() {
   let screenTrack: MediaStreamTrack | null = null
   let fileTrack: MediaStreamTrack | null = null
   let fileVideo: HTMLVideoElement | null = null
-  let processor: BackgroundProcessor | null = null
+  let processor: EffectsProcessor | null = null
+  /** What the processor currently draws; `effects` runs ahead of it while assets load. */
+  let appliedEffects: EffectsSelection = NO_EFFECTS
+  let effectsRequest = 0
+  let effectsWork: Promise<void> = Promise.resolve()
   let mediaReady: Promise<void> = Promise.resolve()
 
   let remoteAudioTrack: MediaStreamTrack | null = null
@@ -527,7 +542,7 @@ function createCall() {
   function outgoingVideoTrack(): MediaStreamTrack | null {
     if (sharing.value === 'screen') return screenTrack
     if (sharing.value === 'file') return fileTrack
-    if (background.value === 'on' && processor) return processor.track
+    if (processor && hasEffects(appliedEffects)) return processor.track
     return cameraTrack
   }
 
@@ -575,6 +590,16 @@ function createCall() {
     if (micTrack) {
       micTrack.enabled = micOn.value
       sendStream.addTrack(micTrack)
+    }
+    // Nothing is shown or sent until a saved background is ready, so the room never flashes by.
+    // A choice made while it loads replaces it, so wait for whichever load is the latest.
+    if (cameraTrack && hasEffects(effects.value)) {
+      applyEffects()
+      let work: Promise<void>
+      do {
+        work = effectsWork
+        await work
+      } while (work !== effectsWork)
     }
     await syncVideo()
     refreshCameras()
@@ -738,36 +763,69 @@ function createCall() {
     fileTrack = null
   }
 
-  // ---- Virtual background ---------------------------------------------------------------------
+  // ---- Backgrounds and effects ----------------------------------------------------------------
 
-  async function toggleBackground() {
-    if (background.value === 'loading') return
-    if (background.value === 'on') {
-      background.value = 'off'
-      processor?.stop()
-      processor = null
+  function setEffects(next: EffectsSelection) {
+    if (next.background === effects.value.background && next.sticker === effects.value.sticker) return
+    effects.value = next
+    saveSelection(next)
+    if (inRoom.value) applyEffects()
+  }
+
+  function applyEffects() {
+    effectsWork = runEffects()
+    return effectsWork
+  }
+
+  /** Brings the processor in line with `effects`; a newer call supersedes an older one. */
+  async function runEffects() {
+    const request = ++effectsRequest
+    const selection = effects.value
+    if (!hasEffects(selection)) {
+      stopEffects()
       await syncVideo()
       return
     }
-    background.value = 'loading'
+    effectsStatus.value = 'loading'
     try {
-      await ensureCamera()
-      // MediaPipe is most of the bundle; load it the first time someone asks for it.
-      const { BackgroundProcessor } = await import('./virtualBackground')
-      const created = await BackgroundProcessor.create(cameraTrack!)
-      if (background.value !== 'loading') {
-        created.stop()
+      if (sharing.value === 'none') await ensureCamera()
+      if (request !== effectsRequest) return
+      if (!cameraTrack && sharing.value === 'none') {
+        effectsStatus.value = hasEffects(appliedEffects) ? 'on' : 'off'
+        emit({ type: 'error', message: 'No camera available.' })
         return
       }
-      if (sharing.value !== 'none') created.setSource(null)
-      processor = created
-      background.value = 'on'
+      // MediaPipe is most of the bundle; load it the first time someone asks for it.
+      const { EffectsProcessor } = await import('@/effects/EffectsProcessor')
+      if (request !== effectsRequest || !inRoom.value) return
+      processor ??= new EffectsProcessor(sharing.value === 'none' ? cameraTrack : null)
+      const target = processor
+      const applied = await target.configure(findBackground(selection.background), findSticker(selection.sticker))
+      if (!applied || request !== effectsRequest || target !== processor) return
+      appliedEffects = selection
+      effectsStatus.value = 'on'
       await syncVideo()
     } catch (error) {
-      console.error('Failed to start the virtual background:', error)
-      background.value = 'off'
-      emit({ type: 'error', message: "Couldn't load the virtual background." })
+      if (request !== effectsRequest) return
+      console.error('Failed to apply effects:', error)
+      emit({ type: 'error', message: "Couldn't load that effect." })
+      // Back to whatever was showing before.
+      effects.value = appliedEffects
+      saveSelection(appliedEffects)
+      if (hasEffects(appliedEffects)) {
+        effectsStatus.value = 'on'
+      } else {
+        stopEffects()
+        await syncVideo()
+      }
     }
+  }
+
+  function stopEffects() {
+    processor?.stop()
+    processor = null
+    appliedEffects = NO_EFFECTS
+    effectsStatus.value = 'off'
   }
 
   // ---- Remote media ---------------------------------------------------------------------------
@@ -843,9 +901,9 @@ function createCall() {
     screenTrack?.stop()
     micTrack = cameraTrack = screenTrack = null
     releaseFile()
-    processor?.stop()
-    if (processor) import('./virtualBackground').then(m => m.releaseSegmenter())
-    processor = null
+    effectsRequest++
+    if (processor) import('@/effects/EffectsProcessor').then(m => m.releaseModels())
+    stopEffects()
     sendStream = new MediaStream()
     localStream.value = null
 
@@ -861,7 +919,6 @@ function createCall() {
 
     messages.value = []
     sharing.value = 'none'
-    background.value = 'off'
     micOn.value = true
     cameraOn.value = true
     remoteAudioMuted.value = false
@@ -873,13 +930,13 @@ function createCall() {
   return {
     // state
     serverUrl: readonly(serverUrl), serverStatus: readonly(serverStatus), roomId, e2ee, inRoom, phase, peersConnected, dataChannelReady, messages,
-    micOn, cameraOn, remoteAudioMuted, remoteVideoHidden, sharing, background, mirrorLocal, cameraCount,
+    micOn, cameraOn, remoteAudioMuted, remoteVideoHidden, sharing, effects: readonly(effects), effectsStatus: readonly(effectsStatus), mirrorLocal, cameraCount,
     remoteMedia, remoteSnapshot, remoteAudioLevel, showRemotePlaceholder,
     localStream, remoteStream,
     canShareScreen, canShareFile,
     // actions
     setServerUrl, join, leave, toggleMic, toggleCamera, switchCamera, toggleRemoteAudio, toggleRemoteVideo,
-    shareScreen, shareFile, stopSharing, toggleBackground, sendMessage, ensureChat, onEvent,
+    shareScreen, shareFile, stopSharing, setEffects, sendMessage, ensureChat, onEvent,
   }
 }
 

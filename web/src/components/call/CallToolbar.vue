@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import {
   Ellipsis, FileVideo, Maximize, MessageSquare, Mic, MicOff, Minimize, MonitorOff, MonitorUp,
-  PhoneOff, PictureInPicture2, SwitchCamera, Video, VideoOff, Volume2, VolumeOff, Eye, EyeOff, Wallpaper,
+  PhoneOff, PictureInPicture2, Sparkles, SwitchCamera, Video, VideoOff, Volume2, VolumeOff, Eye, EyeOff,
 } from '@lucide/vue'
 import type { Call } from '@/call/useCall'
 import {
@@ -24,6 +24,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggleChat: []
   openMore: []
+  openEffects: []
   pickFile: []
   toggleFit: []
   togglePip: []
@@ -85,12 +86,12 @@ function onShare() {
 
     <ToolbarButton
       v-if="!props.compact"
-      :icon="Wallpaper"
-      :label="call.background.value === 'on' ? 'Turn off virtual background' : 'Virtual background'"
-      :tone="call.background.value === 'on' ? 'active' : 'default'"
-      :disabled="call.background.value === 'loading' || sharing"
+      :icon="Sparkles"
+      label="Backgrounds and effects"
+      :tone="call.effectsStatus.value === 'on' ? 'active' : 'default'"
+      :disabled="sharing"
       shortcut="B"
-      @click="call.toggleBackground"
+      @click="emit('openEffects')"
     />
 
     <Separator v-if="!props.compact" orientation="vertical" class="mx-0.5 !h-7 bg-white/15" />

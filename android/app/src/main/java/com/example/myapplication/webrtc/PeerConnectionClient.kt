@@ -2,8 +2,6 @@ package com.example.myapplication.webrtc
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.hardware.camera2.CameraManager
 import android.media.projection.MediaProjection
 import android.os.Handler
@@ -11,8 +9,10 @@ import android.os.Looper
 import android.util.Log
 import com.example.myapplication.R
 import com.example.myapplication.Utils
-import com.example.myapplication.webrtc.vbg.SelfieSegmenter
-import com.example.myapplication.webrtc.vbg.VirtualBackgroundProcessor
+import com.example.myapplication.webrtc.effects.EffectsProcessor
+import com.example.myapplication.webrtc.effects.EffectsScene
+import com.example.myapplication.webrtc.effects.FaceTracker
+import com.example.myapplication.webrtc.effects.SelfieSegmenter
 import io.socket.client.IO
 import io.socket.client.Socket
 import org.webrtc.*
@@ -59,11 +59,12 @@ class PeerConnectionClient(
     private var remoteAudioEnabled = true
     private var e2ee: E2eeManager? = null
 
-    // Virtual background: segmenter/bitmap live for the whole call, the processor per camera VideoSource.
-    private var virtualBackgroundEnabled = false
+    // Backgrounds and effects: the models live for the whole call, the processor per camera VideoSource.
+    private var effectsScene: EffectsScene? = null
+    private var holdEffectFrames = false
     private var segmenter: SelfieSegmenter? = null
-    private var backgroundBitmap: Bitmap? = null
-    private var backgroundProcessor: VirtualBackgroundProcessor? = null
+    private var faceTracker: FaceTracker? = null
+    private var effectsProcessor: EffectsProcessor? = null
 
     companion object {
         private const val TAG = "PeerConnectionClient"
@@ -177,6 +178,7 @@ class PeerConnectionClient(
             val cameraVideoCapturer = videoCapturer as CameraVideoCapturer
             cameraVideoCapturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
                 override fun onCameraSwitchDone(isFrontCamera: Boolean) {
+                    effectsProcessor?.invalidateAnalysis()
                     useFrontCamera = isFrontCamera
                     onDone(isFrontCamera)
                 }
@@ -252,8 +254,8 @@ class PeerConnectionClient(
             Log.d(TAG, "Old capturer disposed")
         }
 
-        // Virtual background is camera-only; the file capturer reuses this VideoSource.
-        detachVirtualBackground()
+        // Effects are camera-only; the file capturer reuses this VideoSource.
+        detachEffects()
 
         // 2. CRITICAL: Dispose the old helper and create a NEW one.
         // This provides a fresh, unconnected Surface for the MediaCodec.
@@ -295,7 +297,7 @@ class PeerConnectionClient(
             videoCapturer = null
             Log.d(TAG, "Old capturer disposed")
         }
-        detachVirtualBackground()
+        detachEffects()
         surfaceTextureHelper?.dispose()
 
         val (width, height, fps) = if (isScreencast) {
@@ -323,7 +325,7 @@ class PeerConnectionClient(
         val oldSource = videoSource
         videoSource = factory!!.createVideoSource(videoCapturer!!.isScreencast)
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
-        if (!isScreencast) attachVirtualBackground()
+        if (!isScreencast) attachEffects()
         videoCapturer!!.initialize(surfaceTextureHelper, context, videoSource!!.capturerObserver)
         Log.d(TAG, "Starting capture: ${width}x$height @ ${fps}fps")
         videoCapturer!!.startCapture(width, height, fps)
@@ -388,6 +390,8 @@ class PeerConnectionClient(
 
         segmenter?.release()
         segmenter = null
+        faceTracker?.release()
+        faceTracker = null
 
         Log.d(TAG, "Closing peer connection factory.")
         factory?.dispose()
@@ -399,43 +403,50 @@ class PeerConnectionClient(
         Log.d(TAG, "Cleanup complete.")
     }
 
-    fun toggleVirtualBackground(enable: Boolean) {
-        virtualBackgroundEnabled = enable
-        if (enable) ensureVirtualBackgroundResources()
-        backgroundProcessor?.let {
+    /**
+     * Drops camera frames until the next [setEffects], so a saved background is in place before
+     * the room is shown or sent. Call before [start].
+     */
+    fun holdEffects() {
+        holdEffectFrames = true
+        effectsProcessor?.holdFrames = true
+    }
+
+    /** Applies a background and sticker to the camera; null (or an empty scene) turns them off. */
+    fun setEffects(scene: EffectsScene?) {
+        val active = scene?.takeIf { it.isActive }
+        if (active?.needsMask == true && segmenter == null) segmenter = SelfieSegmenter(context)
+        if (active?.needsFace == true && faceTracker == null) faceTracker = FaceTracker(context)
+        effectsScene = active
+        holdEffectFrames = false
+        effectsProcessor?.let {
             it.segmenter = segmenter
-            it.background = backgroundBitmap
-            it.setEnabled(enable)
+            it.faceTracker = faceTracker
+            it.setScene(active)
         }
-        Log.d(TAG, "Virtual background ${if (enable) "enabled" else "disabled"}")
+        Log.d(TAG, "Effects: ${active?.background?.id ?: "none"} / ${active?.sticker?.id ?: "no sticker"}")
     }
 
     // ========== Private Helper Methods ==========
 
-    private fun ensureVirtualBackgroundResources() {
-        if (segmenter == null) segmenter = SelfieSegmenter(context)
-        if (backgroundBitmap == null) {
-            val options = BitmapFactory.Options().apply { inScaled = false }
-            backgroundBitmap = BitmapFactory.decodeResource(context.resources, R.drawable.virtual_background, options)
-        }
-    }
-
-    /** Installs the processor on the current camera VideoSource; frames pass through while disabled. */
-    private fun attachVirtualBackground() {
+    /** Installs the processor on the current camera VideoSource; frames pass through without effects. */
+    private fun attachEffects() {
         val source = videoSource ?: return
-        val processor = VirtualBackgroundProcessor().apply {
+        val processor = EffectsProcessor(context).apply {
             segmenter = this@PeerConnectionClient.segmenter
-            background = backgroundBitmap
-            setEnabled(virtualBackgroundEnabled)
+            faceTracker = this@PeerConnectionClient.faceTracker
+            setScene(effectsScene)
+            holdFrames = holdEffectFrames
+            onModelFailed = { mainHandler.post { callbacks.onEffectsFailed() } }
         }
         source.setVideoProcessor(processor)
-        backgroundProcessor = processor
+        effectsProcessor = processor
     }
 
     /** Must run while the SurfaceTextureHelper the processor rendered on is still alive. */
-    private fun detachVirtualBackground() {
-        val processor = backgroundProcessor ?: return
-        backgroundProcessor = null
+    private fun detachEffects() {
+        val processor = effectsProcessor ?: return
+        effectsProcessor = null
         videoSource?.setVideoProcessor(null)
         surfaceTextureHelper?.handler?.let { handler ->
             ThreadUtils.invokeAtFrontUninterruptibly(handler) { processor.releaseGl() }
@@ -448,7 +459,7 @@ class PeerConnectionClient(
         videoSource = factory!!.createVideoSource(videoCapturer!!.isScreencast)
 
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
-        attachVirtualBackground()
+        attachEffects()
         videoCapturer!!.initialize(surfaceTextureHelper, context, videoSource!!.capturerObserver)
 
         val (width, height, fps) = getCameraCaptureDimensions()
@@ -543,7 +554,7 @@ class PeerConnectionClient(
     }
 
     private fun cleanupMediaResources() {
-        detachVirtualBackground()
+        detachEffects()
 
         audioSource?.dispose()
         audioSource = null

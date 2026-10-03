@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how WebRTC-Demo is put together: the signaling server, the three clients (Web, Android, iOS), how a call is set up, how media sources are switched, and how end-to-end encryption (E2EE) and virtual background work on every platform.
+This document explains how WebRTC-Demo is put together: the signaling server, the three clients (Web, Android, iOS), how a call is set up, how media sources are switched, and how end-to-end encryption (E2EE) and backgrounds and effects work on every platform.
 
 - [1. Big picture](#1-big-picture)
 - [2. Repository layout](#2-repository-layout)
@@ -11,7 +11,7 @@ This document explains how WebRTC-Demo is put together: the signaling server, th
 - [7. iOS client](#7-ios-client)
 - [8. Switching media sources](#8-switching-media-sources)
 - [9. End-to-end encryption](#9-end-to-end-encryption)
-- [10. Virtual background](#10-virtual-background)
+- [10. Backgrounds and effects](#10-backgrounds-and-effects)
 - [11. Data channel (chat)](#11-data-channel-chat)
 - [12. Versions and build](#12-versions-and-build)
 - [13. Limitations](#13-limitations)
@@ -54,12 +54,19 @@ Any client can call any other client (Web ↔ Android ↔ iOS). A room holds at 
 WebRTC-Demo/
 ├── signaling-server/          Socket.IO relay (rooms, SDP, ICE, E2EE key)
 │   └── server.js
+├── effects/                   Backgrounds and stickers bundled by all three apps
+│   ├── backgrounds.json, stickers.json
+│   └── backgrounds/, thumbnails/, stickers/
+├── tools/prepare_effects.py   Turns downloads in effects-source/ into effects/backgrounds
 ├── web/                       Vue 3 single-page client
 │   └── src/
 │       ├── App.vue            Lobby ↔ call transition, theme, toasts
 │       ├── call/
-│       │   ├── useCall.ts     Signaling, RTCPeerConnection, media sources, E2EE wiring, chat
-│       │   └── virtualBackground.ts  MediaPipe segmentation + canvas compositing (loaded on demand)
+│       │   └── useCall.ts     Signaling, RTCPeerConnection, media sources, effects, E2EE wiring, chat
+│       ├── effects/
+│       │   ├── catalog.ts     Reads the effects folder, saved selection
+│       │   ├── placement.ts   Sticker placement from face points, smoothing
+│       │   └── EffectsProcessor.ts  MediaPipe segmentation + face landmarks, canvas compositing (loaded on demand)
 │       ├── components/
 │       │   ├── lobby/         Lobby screen
 │       │   ├── call/          Call screen: stage, local tile, toolbar, chat, More drawer, PiP view
@@ -73,10 +80,11 @@ WebRTC-Demo/
 │   │   ├── CallActivity.kt        Hosts the Compose call screen: permissions, pickers, MediaProjection, PiP
 │   │   ├── ScreenCaptureService.kt  Foreground service required by MediaProjection
 │   │   ├── call/CallViewModel.kt  Call state (StateFlow), owns PeerConnectionClient and the EGL context
+│   │   ├── effects/EffectsCatalog.kt  Reads assets/effects, saved selection
 │   │   ├── ui/
 │   │   │   ├── lobby/LobbyScreen.kt     Room id, E2EE switch, join button
 │   │   │   ├── call/                    CallScreen, CallControls (floating toolbar, sheets),
-│   │   │   │                            ChatSheet, PeerPlaceholder, CallPreviews
+│   │   │   │                            ChatSheet, EffectsSheet, PeerPlaceholder, CallPreviews
 │   │   │   ├── video/                   TextureViewRenderer, VideoRenderer (Compose), FrameSnapshotter
 │   │   │   └── theme/Theme.kt           MaterialExpressiveTheme, dynamic color
 │   │   └── webrtc/
@@ -85,9 +93,10 @@ WebRTC-Demo/
 │   │       ├── SignalingHandler.kt      Socket.IO events <-> WebRtcPeer
 │   │       ├── E2eeManager.kt           FrameCryptor key provider
 │   │       ├── Mp4VideoCapturer.kt      Video file -> SurfaceTexture capturer
-│   │       └── vbg/                     Virtual background (MediaPipe + GLES)
+│   │       └── effects/                 EffectsProcessor (GLES), SelfieSegmenter, FaceTracker,
+│   │                                    BackgroundVideo, StickerPlacement
 │   ├── java/org/webrtc/Camera{1,2}Helper.kt  Camera capture formats (package-private webrtc API)
-│   └── assets/selfie_segmenter.tflite
+│   └── assets/                     selfie_segmenter.tflite, face_landmarker.task (effects/ is copied in at build time)
 └── ios/
     ├── WebRTCDemo/
     │   ├── WebRTCDemoApp.swift          @main SwiftUI app: lobby, call as a full screen cover
@@ -100,7 +109,9 @@ WebRTC-Demo/
     │   ├── VideoView.swift              RTCMTLVideoView wrapper, FrameSnapshotter
     │   ├── PictureInPicture.swift       System PiP: AVSampleBufferDisplayLayer renderer
     │   ├── PeerConnectionClient.swift   class WebRTCClient: factory, tracks, capturers, E2EE
-    │   ├── VirtualBackgroundProcessor.swift  Vision + Core Image proxy capturer delegate
+    │   ├── EffectsCatalog.swift         Reads the bundled effects folder, saved selection, sticker placement
+    │   ├── EffectsProcessor.swift       Vision + Core Image proxy capturer delegate
+    │   ├── EffectsSheet.swift           Backgrounds and filters picker with a live preview
     │   ├── FlutterBroadcastScreenCapturer.*  Screen capturer fed by the broadcast extension
     │   └── FlutterSocketConnection*.*        Unix socket server + frame reader (from flutter-webrtc)
     ├── WebRTCDemoScreenBroadcast/       ReplayKit upload extension
@@ -251,7 +262,7 @@ flowchart TB
         UI["Components<br/>LobbyView, CallView, PipView"]
         CALL["useCall()<br/>Socket.IO handlers, RTCPeerConnection,<br/>media sources, chat"]
         MEDIA["Local media<br/>getUserMedia / getDisplayMedia /<br/>video.captureStream"]
-        VBG["virtualBackground.ts<br/>MediaPipe ImageSegmenter + canvas"]
+        VBG["EffectsProcessor.ts<br/>MediaPipe ImageSegmenter + FaceLandmarker + canvas"]
         TR["attachFrameTransform()<br/>applyE2EECodecPreferences()<br/>updateCodecMap()"]
     end
 
@@ -277,20 +288,20 @@ flowchart TB
 
 ### Local media
 
-Each source has its own track: microphone, camera, screen, video file, and the canvas track of the virtual background. `outgoingVideoTrack()` picks the one to send (screen or file while sharing, else the background canvas when it is on, else the camera), and `syncVideo()` puts it on the video sender with `replaceTrack()` and updates the local preview. The sender (and its E2EE transform) stays the same, so no renegotiation is needed. The microphone track is never replaced, so muting keeps working while sharing.
+Each source has its own track: microphone, camera, screen, video file, and the canvas track of the effects. `outgoingVideoTrack()` picks the one to send (screen or file while sharing, else the effects canvas when an effect is on, else the camera), and `syncVideo()` puts it on the video sender with `replaceTrack()` and updates the local preview. The sender (and its E2EE transform) stays the same, so no renegotiation is needed. The microphone track is never replaced, so muting keeps working while sharing.
 
 ```mermaid
 flowchart LR
     CAM["Camera<br/>getUserMedia"] --> SEL{"outgoingVideoTrack()"}
     SCR["Screen<br/>getDisplayMedia"] --> SEL
     FILE["Video file<br/>&lt;video&gt;.captureStream()"] --> SEL
-    CAM --> SEG["ImageSegmenter<br/>categoryMask"] --> CANVAS["canvas compositing"] --> CS["canvas.captureStream(30)"] --> SEL
+    CAM --> SEG["ImageSegmenter + FaceLandmarker"] --> CANVAS["canvas compositing"] --> CS["canvas.captureStream(30)"] --> SEL
     SEL -- "replaceTrack()" --> SND["video RTCRtpSender"] --> NET(("network"))
 ```
 
 Turning the camera off stops the camera track (the light goes off). Sharing stops it as well, and stopping the share opens the camera again. The remote audio plays from one hidden `<audio>` element; every `<video>` element is muted, so the preview, the stage and the PiP window never play it twice.
 
-MediaPipe is most of the bundle, so `virtualBackground.ts` is imported the first time the background is turned on. When the tab is hidden, the compositing loop switches from `requestAnimationFrame` (paused in background tabs) to timers, so the peer keeps receiving frames while the call is in picture-in-picture.
+MediaPipe is most of the bundle, so `EffectsProcessor.ts` is imported the first time an effect is turned on. When the tab is hidden, the compositing loop switches from `requestAnimationFrame` (paused in background tabs) to timers, so the peer keeps receiving frames while the call is in picture-in-picture.
 
 ### UI
 
@@ -298,7 +309,7 @@ MediaPipe is most of the bundle, so `virtualBackground.ts` is imported the first
 - **Stage.** The remote video fills the stage; double tap (or `F`) switches between fill and fit. It starts in fit when the remote side shares a screen or when its orientation differs from the window, like the native apps. When the remote camera is off, a blurred snapshot of its last frame sits behind an avatar with an audio-level ring.
 - **Local tile.** The tile is driven by motion values. Dragging projects the release velocity to choose a corner, and the tile snaps there with a spring. Its limits follow the top bar and the toolbar, which hide after 4 s without input.
 - **Chat.** A side panel at 1024 px and wider, a bottom drawer below. New messages also show as bubbles above the toolbar for a few seconds.
-- **Controls.** The toolbar has tooltips with shortcuts on desktop (`M` mic, `V` camera, `C` chat, `B` background, `F` fit, `P` picture-in-picture). On phones, `More` opens a drawer with the remaining options. All chrome stays clear of the safe area insets.
+- **Controls.** The toolbar has tooltips with shortcuts on desktop (`M` mic, `V` camera, `C` chat, `B` backgrounds and effects, `F` fit, `P` picture-in-picture). On phones, `More` opens a drawer with the remaining options. All chrome stays clear of the safe area insets.
 
 ### Picture-in-picture
 
@@ -347,7 +358,7 @@ classDiagram
         VideoCapturer / VideoSource / tracks
         createDeviceCapture(isScreencast)
         createFileCapture(path)
-        toggleVirtualBackground()
+        setEffects(EffectsScene)
         toggleRemoteAudio()
         onDestroy()
     }
@@ -366,12 +377,16 @@ classDiagram
         createSenderCryptor()
         createReceiverCryptor()
     }
-    class VirtualBackgroundProcessor {
+    class EffectsProcessor {
         VideoProcessor
         GLES compositing
     }
     class SelfieSegmenter {
         MediaPipe ImageSegmenter
+        own HandlerThread
+    }
+    class FaceTracker {
+        MediaPipe FaceLandmarker
         own HandlerThread
     }
     class Mp4VideoCapturer
@@ -386,9 +401,10 @@ classDiagram
     PeerConnectionClient --> SignalingHandler
     PeerConnectionClient --> WebRtcPeer : creates on new user joined / offer
     PeerConnectionClient --> E2eeManager : when E2EE on
-    PeerConnectionClient --> VirtualBackgroundProcessor : camera VideoSource only
+    PeerConnectionClient --> EffectsProcessor : camera VideoSource only
     PeerConnectionClient --> Mp4VideoCapturer
-    VirtualBackgroundProcessor --> SelfieSegmenter
+    EffectsProcessor --> SelfieSegmenter
+    EffectsProcessor --> FaceTracker
     WebRtcPeer --> E2eeManager
     SignalingHandler --> E2eeManager
     WebRtcPeer ..> CallViewModel : RtcListener
@@ -405,8 +421,9 @@ Threads that matter:
 | Main | Android | UI, `PeerConnectionClient` public calls |
 | Socket.IO event thread | socket.io-client | `SignalingHandler` callbacks, `createOffer` |
 | WebRTC signaling thread | webrtc-sdk | `PeerConnection.Observer` callbacks (`onAddTrack`, ICE) |
-| `CaptureThread` | `SurfaceTextureHelper` | camera frames, `VirtualBackgroundProcessor` GL work |
-| `VirtualBgInference` | `SelfieSegmenter` | MediaPipe inference |
+| `CaptureThread` | `SurfaceTextureHelper` | camera frames, `EffectsProcessor` GL work |
+| `SegmenterInference` | `SelfieSegmenter` | MediaPipe person mask |
+| `FaceTracker` | `FaceTracker` | MediaPipe face landmarks |
 
 ### Picture-in-picture
 
@@ -457,10 +474,10 @@ classDiagram
         local tracks + RTCVideoSource
         RTCFrameCryptorKeyProvider
         frameCryptors
-        setVirtualBackground()
+        setEffects()
         setRemoteAudioEnabled()
     }
-    class VirtualBackgroundProcessor {
+    class EffectsProcessor {
         RTCVideoCapturerDelegate proxy
         Vision + Core Image (Metal)
     }
@@ -478,8 +495,8 @@ classDiagram
     CallViewModel --> WebRTCClient
     WebRTCClient ..> CallViewModel : delegate (any thread)
     WebRTCClient --> RTCCameraVideoCapturer
-    RTCCameraVideoCapturer --> VirtualBackgroundProcessor : delegate
-    VirtualBackgroundProcessor --> WebRTCClient : forwards to RTCVideoSource
+    RTCCameraVideoCapturer --> EffectsProcessor : delegate
+    EffectsProcessor --> WebRTCClient : forwards to RTCVideoSource
     WebRTCClient --> RTCFileVideoCapturer
     WebRTCClient --> FlutterBroadcastScreenCapturer
     SampleHandler ..> FlutterBroadcastScreenCapturer : frames over app group socket
@@ -649,15 +666,37 @@ Both peers must enable E2EE. If only one does, the other side gets frames it can
 
 ---
 
-## 10. Virtual background
+## 10. Backgrounds and effects
 
-Virtual background only processes **camera** frames; screen share and file share are sent untouched.
+Effects only process **camera** frames; screen share and file share are sent untouched. A background (none, blur, a picture or a looping video) and a face sticker can be combined.
+
+### Shared assets
+
+The `effects/` folder at the repository root is the single source for all three apps: Vite imports it with `import.meta.glob`, Android copies it into the APK's `assets/effects` with a generated asset source (`copyEffects` in `app/build.gradle.kts`), and iOS bundles it as a folder reference.
+
+- `backgrounds.json` lists pictures and videos (`id`, `name`, `type`, `file`, `thumbnail`). It is written by `tools/prepare_effects.py` from `effects-source/`. Blur and none are built into each app.
+- `stickers.json` lists stickers. Sizes and offsets are in units of the distance between the eyes, measured from the `anchor` (`eyes`, `nose` or `mouth`), with positive `offsetY` up the face. `height` is optional and stretches the artwork.
+- An entry whose file is missing is skipped, and a saved choice that no longer exists falls back to none.
+
+### Sticker placement
+
+Every platform turns its face landmarks into four points (both eye centers, nose tip, mouth center) and runs the same placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`):
+
+- "Right" runs from one eye to the other and "up" from the mouth to the eyes, so the sticker follows a tilted head. The eye order comes from that up direction, so it does not matter which eye a detector calls left.
+- The unit is the larger of the eye distance and eyes-to-mouth / 1.2, so stickers do not shrink when the head turns sideways.
+- A smoother blends each placement with the previous one (40 % old) and keeps the last one through 6 missed detections.
+
+### Starting with an effect on
+
+The selection is saved (`localStorage`, `SharedPreferences`, `UserDefaults`). When a call starts with a saved effect, the camera frames are held (web: the first `replaceTrack` waits; Android and iOS: the processor drops camera frames) until the effect is loaded and the first mask is ready, so the peer never sees the real background first. If an effect cannot be loaded, the previous choice comes back with a toast.
 
 | | Web | Android | iOS |
 |---|---|---|---|
-| Segmentation | MediaPipe `ImageSegmenter` (`selfie_segmenter`), `categoryMask` | MediaPipe `tasks-vision` 1.0.0 (`selfie_segmenter`), confidence mask | Apple Vision `VNGeneratePersonSegmentationRequest` (`.balanced`) |
-| Where it runs | main thread, `requestAnimationFrame` | dedicated `HandlerThread`, 256 px input | serial `DispatchQueue`, every 2nd frame |
-| Compositing | 2D canvas, per pixel | GLES fragment shader on the camera texture | `CIBlendWithMask` on a Metal `CIContext` |
+| Person mask | MediaPipe `ImageSegmenter` (`selfie_segmenter`), `categoryMask` | MediaPipe `tasks-vision` 1.0.0 (`selfie_segmenter`), confidence mask, 256 px input | Vision `VNGeneratePersonSegmentationRequest` (`.balanced`), every 2nd frame |
+| Face points | MediaPipe `FaceLandmarker` | MediaPipe `FaceLandmarker` (`face_landmarker.task`), 384 px input | Vision `VNDetectFaceLandmarksRequest`, every 2nd frame |
+| Blur | `ctx.filter = blur()` (downscaled draw on Safari) | downscale + separable Gaussian in two FBOs | `CIGaussianBlur` |
+| Video background | hidden muted `<video>` | `MediaPlayer` into an OES `SurfaceTexture` | `AVPlayer` + `AVPlayerItemVideoOutput` |
+| Compositing | 2D canvas | GLES fragment shader on the camera texture, sticker quad with premultiplied alpha | `CIBlendWithMask`, sticker `composited(over:)`, Metal `CIContext` |
 | Output | `canvas.captureStream(30)` + `replaceTrack` | `TextureBuffer` frame (rotation 0) | `RTCCVPixelBuffer` (BGRA), original rotation |
 | Hook point | separate `MediaStream` | `VideoSource.setVideoProcessor()` | proxy `RTCVideoCapturerDelegate` |
 
@@ -665,25 +704,28 @@ Virtual background only processes **camera** frames; screen share and file share
 
 ```mermaid
 flowchart LR
-    CAM["Camera2 / Camera1<br/>OES texture"] --> VP["VirtualBackgroundProcessor<br/>(CaptureThread, GL context)"]
-    VP -- "1. draw upright 256 px into FBO,<br/>glReadPixels (only when idle)" --> SEG["SelfieSegmenter<br/>(VirtualBgInference thread)<br/>MediaPipe + temporal smoothing"]
-    SEG -- "2. latest mask (8-bit)" --> VP
-    VP -- "3. shader: mix(background, camera, smoothstep(mask))<br/>into pooled RGB texture" --> OUT["TextureBufferImpl<br/>VideoFrame (rotation 0)"]
+    CAM["Camera2 / Camera1<br/>OES texture"] --> VP["EffectsProcessor<br/>(CaptureThread, GL context)"]
+    VP -- "1. small upright copy,<br/>glReadPixels (only when a model is idle)" --> SEG["SelfieSegmenter<br/>(SegmenterInference)"]
+    VP -- "1." --> FT["FaceTracker<br/>(FaceTracker thread)"]
+    SEG -- "2. latest mask" --> VP
+    FT -- "2. latest face points" --> VP
+    BG["picture texture / blur FBOs /<br/>BackgroundVideo (OES)"] --> VP
+    VP -- "3. shader: mix(background, camera, mask),<br/>then the sticker quad" --> OUT["TextureBufferImpl<br/>VideoFrame (rotation 0)"]
     OUT --> SRC["VideoSource -> encoder + local preview"]
 ```
 
-Full-resolution pixels never leave the GPU; only a 256 px copy is read back for inference. If inference is still busy, the frame keeps using the previous mask instead of waiting.
+Full-resolution pixels never leave the GPU; only a small copy is read back for the models, and each model copies it before its own thread uses it. If a model is still busy, the frame uses its previous result instead of waiting.
 
 ### iOS pipeline
 
 ```mermaid
 flowchart LR
-    CAM["RTCCameraVideoCapturer<br/>NV12 CVPixelBuffer"] --> VBP["VirtualBackgroundProcessor<br/>(proxy delegate)"]
-    VBP -- "disabled / not camera" --> SRC["RTCVideoSource"]
-    VBP -- "enabled" --> Q["processing queue"]
+    CAM["RTCCameraVideoCapturer<br/>NV12 CVPixelBuffer"] --> EP["EffectsProcessor<br/>(proxy delegate)"]
+    EP -- "no scene / not camera" --> SRC["RTCVideoSource"]
+    EP -- "scene set" --> Q["processing queue"]
     Q --> UP["rotate upright (CIImage.oriented)"]
-    UP --> VN["Vision person segmentation<br/>(every 2nd frame, cached mask)"]
-    VN --> BL["CIBlendWithMask<br/>camera over aspect-filled background"]
+    UP --> VN["Vision person segmentation + face landmarks<br/>(every 2nd frame, cached)"]
+    VN --> BL["CIBlendWithMask over the background,<br/>sticker composited on top"]
     BL --> RB["rotate back, render into<br/>BGRA CVPixelBufferPool (Metal)"]
     RB --> SRC
 ```
@@ -694,11 +736,13 @@ While a frame is being processed, new camera frames are dropped, so the capture 
 
 ```mermaid
 flowchart LR
-    V["hidden &lt;video&gt;<br/>camera stream"] --> IS["ImageSegmenter.segmentForVideo"]
-    IS --> MK["categoryMask<br/>0 = person"]
-    MK --> AM["alpha mask canvas<br/>(blurred edge)"]
-    V --> CV["canvas: frame, destination-in mask,<br/>destination-over background"]
-    AM --> CV
+    V["hidden &lt;video&gt;<br/>camera stream"] --> IS["ImageSegmenter + FaceLandmarker<br/>(segmentForVideo / detectForVideo)"]
+    IS --> MK["person mask"]
+    IS --> FP["face points -> placement"]
+    BGV["blur / picture / &lt;video&gt;"] --> CV
+    V --> CV["canvas: background, person through the mask,<br/>sticker"]
+    MK --> CV
+    FP --> CV
     CV --> CS["canvas.captureStream(30)"] --> RT["replaceTrack on video sender"]
 ```
 
@@ -732,8 +776,8 @@ Chat used to create the channel lazily on first open, which renegotiated the cal
 |---|---|---|
 | webrtc-sdk Android | `io.github.webrtc-sdk:android:150.7871.01` | `android/app/build.gradle.kts` |
 | webrtc-sdk iOS | pod `WebRTC-SDK` `150.7871.01` | `ios/Podfile`; run `pod install --repo-update` after upgrading |
-| MediaPipe Android | `com.google.mediapipe:tasks-vision:1.0.0` | model in `android/app/src/main/assets/selfie_segmenter.tflite` |
-| MediaPipe Web | `@mediapipe/tasks-vision` | model loaded from `storage.googleapis.com` |
+| MediaPipe Android | `com.google.mediapipe:tasks-vision:1.0.0` | models in `android/app/src/main/assets/` (`selfie_segmenter.tflite`, `face_landmarker.task`, stored uncompressed) |
+| MediaPipe Web | `@mediapipe/tasks-vision` | models loaded from `storage.googleapis.com` |
 | Jetpack Compose | BOM `2026.06.01`, `material3` `1.5.0-alpha18` | Material 3 Expressive is only in the 1.5 alphas. Newer Compose BOMs need AGP 9.1 and compileSdk 37 |
 | Android Gradle Plugin | `8.13.2`, Gradle `9.5.1`, Kotlin `2.3.0` | compileSdk 36, minSdk 24 |
 | iOS deployment target | 26.0 | Liquid Glass needs iOS 26; build with Xcode 26 |

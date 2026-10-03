@@ -30,7 +30,7 @@
 		2BF2E2282CA14F2E003EFE08 /* WebRTCDemoScreenBroadcastSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2BF2E21E2CA14F2E003EFE08 /* WebRTCDemoScreenBroadcastSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2BF2E22B2CA14F2E003EFE08 /* WebRTCDemoScreenBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2BF2E2132CA14F2E003EFE08 /* WebRTCDemoScreenBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8F909062B84A554A86DBCACD /* Pods_WebRTCDemoScreenBroadcast.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A272B9F2D2B26CDD4DC19CB /* Pods_WebRTCDemoScreenBroadcast.framework */; };
-		2BA1E0022F20A00100E2EE01 /* VirtualBackgroundProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA1E0012F20A00100E2EE01 /* VirtualBackgroundProcessor.swift */; };
+		2BA1E0022F20A00100E2EE01 /* EffectsProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA1E0012F20A00100E2EE01 /* EffectsProcessor.swift */; };
 		2BC0A1012F30B00200E2EE01 /* WebRTCDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1012F30B00100E2EE01 /* WebRTCDemoApp.swift */; };
 		2BC0A1022F30B00200E2EE01 /* LobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1022F30B00100E2EE01 /* LobbyView.swift */; };
 		2BC0A1032F30B00200E2EE01 /* CallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1032F30B00100E2EE01 /* CallView.swift */; };
@@ -41,6 +41,9 @@
 		2BC0A1082F30B00200E2EE01 /* PeerPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1082F30B00100E2EE01 /* PeerPlaceholderView.swift */; };
 		2BC0A1092F30B00200E2EE01 /* PictureInPicture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1092F30B00100E2EE01 /* PictureInPicture.swift */; };
 		2BC0A10A2F30B00200E2EE01 /* SignalingServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A10A2F30B00100E2EE01 /* SignalingServer.swift */; };
+		2BC0A10B2F30B00200E2EE01 /* EffectsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A10B2F30B00100E2EE01 /* EffectsCatalog.swift */; };
+		2BC0A10C2F30B00200E2EE01 /* EffectsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A10C2F30B00100E2EE01 /* EffectsSheet.swift */; };
+		2BC0A10D2F30B00200E2EE01 /* effects in Resources */ = {isa = PBXBuildFile; fileRef = 2BC0A10D2F30B00100E2EE01 /* effects */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -112,7 +115,7 @@
 		BD8843436D2FB83046716579 /* Pods-WebRTCDemoScreenBroadcast.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WebRTCDemoScreenBroadcast.debug.xcconfig"; path = "Target Support Files/Pods-WebRTCDemoScreenBroadcast/Pods-WebRTCDemoScreenBroadcast.debug.xcconfig"; sourceTree = "<group>"; };
 		EB4C4CE6D9622011D0223E17 /* Pods-WebRTCDemoScreenBroadcast.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WebRTCDemoScreenBroadcast.release.xcconfig"; path = "Target Support Files/Pods-WebRTCDemoScreenBroadcast/Pods-WebRTCDemoScreenBroadcast.release.xcconfig"; sourceTree = "<group>"; };
 		F27C035422F919648ABB9E2C /* Pods-WebRTCDemo.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WebRTCDemo.debug.xcconfig"; path = "Target Support Files/Pods-WebRTCDemo/Pods-WebRTCDemo.debug.xcconfig"; sourceTree = "<group>"; };
-		2BA1E0012F20A00100E2EE01 /* VirtualBackgroundProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualBackgroundProcessor.swift; sourceTree = "<group>"; };
+		2BA1E0012F20A00100E2EE01 /* EffectsProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsProcessor.swift; sourceTree = "<group>"; };
 		2BC0A1012F30B00100E2EE01 /* WebRTCDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCDemoApp.swift; sourceTree = "<group>"; };
 		2BC0A1022F30B00100E2EE01 /* LobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyView.swift; sourceTree = "<group>"; };
 		2BC0A1032F30B00100E2EE01 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
@@ -123,6 +126,9 @@
 		2BC0A1082F30B00100E2EE01 /* PeerPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerPlaceholderView.swift; sourceTree = "<group>"; };
 		2BC0A1092F30B00100E2EE01 /* PictureInPicture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureInPicture.swift; sourceTree = "<group>"; };
 		2BC0A10A2F30B00100E2EE01 /* SignalingServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalingServer.swift; sourceTree = "<group>"; };
+		2BC0A10B2F30B00100E2EE01 /* EffectsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsCatalog.swift; sourceTree = "<group>"; };
+		2BC0A10C2F30B00100E2EE01 /* EffectsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsSheet.swift; sourceTree = "<group>"; };
+		2BC0A10D2F30B00100E2EE01 /* effects */ = {isa = PBXFileReference; lastKnownFileType = folder; name = effects; path = ../effects; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +165,7 @@
 			isa = PBXGroup;
 			children = (
 				2B7458032C98569C003184F2 /* WebRTCDemo */,
+				2BC0A10D2F30B00100E2EE01 /* effects */,
 				2BF2E2162CA14F2E003EFE08 /* WebRTCDemoScreenBroadcast */,
 				2BF2E2222CA14F2E003EFE08 /* WebRTCDemoScreenBroadcastSetupUI */,
 				2B7458022C98569C003184F2 /* Products */,
@@ -193,10 +200,12 @@
 				2BC0A1082F30B00100E2EE01 /* PeerPlaceholderView.swift */,
 				2BC0A1092F30B00100E2EE01 /* PictureInPicture.swift */,
 				2BC0A10A2F30B00100E2EE01 /* SignalingServer.swift */,
+				2BC0A10B2F30B00100E2EE01 /* EffectsCatalog.swift */,
+				2BC0A10C2F30B00100E2EE01 /* EffectsSheet.swift */,
 				2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */,
 				2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */,
 				2BD4B3CA2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift */,
-				2BA1E0012F20A00100E2EE01 /* VirtualBackgroundProcessor.swift */,
+				2BA1E0012F20A00100E2EE01 /* EffectsProcessor.swift */,
 				2BD4B3D22F14CCB60092E3C4 /* DarwinNotificationCenter.swift */,
 				2BD4B3D42F14CCBB0092E3C4 /* WebRTCDemo-Bridging-Header.h */,
 				2BD4B3D52F14CCF70092E3C4 /* FlutterBroadcastScreenCapturer.h */,
@@ -366,6 +375,7 @@
 				2B74580E2C98569D003184F2 /* Assets.xcassets in Resources */,
 				2B7458112C98569D003184F2 /* Base in Resources */,
 				2BD4B3CF2F14C4350092E3C4 /* video.mp4 in Resources */,
+				2BC0A10D2F30B00200E2EE01 /* effects in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -465,13 +475,15 @@
 				2BC0A1082F30B00200E2EE01 /* PeerPlaceholderView.swift in Sources */,
 				2BC0A1092F30B00200E2EE01 /* PictureInPicture.swift in Sources */,
 				2BC0A10A2F30B00200E2EE01 /* SignalingServer.swift in Sources */,
+				2BC0A10B2F30B00200E2EE01 /* EffectsCatalog.swift in Sources */,
+				2BC0A10C2F30B00200E2EE01 /* EffectsSheet.swift in Sources */,
 				2BD4B3DD2F14CD090092E3C4 /* FlutterSocketConnectionFrameReader.m in Sources */,
 				2BD4B3D32F14CCB60092E3C4 /* DarwinNotificationCenter.swift in Sources */,
 				2BD4B3DA2F14CD030092E3C4 /* FlutterSocketConnection.m in Sources */,
 				2BD4B3D72F14CCFD0092E3C4 /* FlutterBroadcastScreenCapturer.m in Sources */,
 				2BBD7BE62C986938003B4801 /* RTCCustomFrameCapturer.swift in Sources */,
 				2BD4B3CB2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift in Sources */,
-				2BA1E0022F20A00100E2EE01 /* VirtualBackgroundProcessor.swift in Sources */,
+				2BA1E0022F20A00100E2EE01 /* EffectsProcessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

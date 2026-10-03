@@ -21,6 +21,10 @@ enum ChatStatus {
     case closed, opening, open
 }
 
+enum EffectsStatus {
+    case off, loading, on
+}
+
 /// What the remote peer reports about its own tracks through the "media state" event.
 struct MediaState: Equatable {
     var audio = true
@@ -58,8 +62,10 @@ final class CallViewModel {
     private(set) var remoteVideoHidden = false
     private(set) var remote = MediaState()
     private(set) var sharing: Sharing = .none
-    private(set) var virtualBackground = false
-    private(set) var virtualBackgroundAvailable = false
+    /// The chosen background and sticker; `effectsStatus` says whether they are showing yet.
+    private(set) var effects: EffectsSelection
+    private(set) var effectsStatus: EffectsStatus = .off
+    private(set) var effectsAvailable = false
     private(set) var chat: ChatStatus = .closed
     private(set) var messages: [ChatMessage] = []
     private(set) var unread = 0
@@ -84,6 +90,10 @@ final class CallViewModel {
     @ObservationIgnored private var nextMessageId = 0
     @ObservationIgnored private var mediaStateWork: DispatchWorkItem?
     @ObservationIgnored private var audioLevelTimer: Timer?
+    @ObservationIgnored private var appliedEffects = EffectsSelection()
+    @ObservationIgnored private var effectsTask: Task<Void, Never>?
+
+    let effectsCatalog = EffectsCatalog.shared
 
     private static let mediaStateDelay: TimeInterval = 0.3
     private static let dataChannelName = "MyApp Channel"
@@ -91,6 +101,7 @@ final class CallViewModel {
     init(roomId: String, e2ee: Bool) {
         self.roomId = roomId
         self.e2ee = e2ee
+        effects = EffectsStore.load(.shared)
         let serverURL = URL(string: SignalingServer.current) ?? URL(string: SignalingServer.defaultURL)!
         manager = SocketManager(socketURL: serverURL, config: [.log(true), .compress])
         socket = manager.defaultSocket
@@ -120,6 +131,7 @@ final class CallViewModel {
         audioLevelTimer?.invalidate()
         audioLevelTimer = nil
         mediaStateWork?.cancel()
+        effectsTask?.cancel()
 
         if sharing == .screen {
             client?.stopScreenCapture()
@@ -201,16 +213,45 @@ final class CallViewModel {
         remoteTrack?.isEnabled = !remoteVideoHidden
     }
 
-    func toggleVirtualBackground() {
-        guard let client, client.isVirtualBackgroundAvailable else { return }
-        virtualBackground.toggle()
-        client.setVirtualBackground(enabled: virtualBackground)
-        if !virtualBackground {
-            show("Virtual background off", systemImage: "person.crop.rectangle")
-        } else if sharing != .none {
-            show("Virtual background will apply when the camera is back", systemImage: "person.and.background.dotted")
-        } else {
-            show("Virtual background on", systemImage: "person.and.background.dotted")
+    /// Remembers the choice and applies it to the camera.
+    func setEffects(_ selection: EffectsSelection) {
+        guard selection != effects else { return }
+        effects = selection
+        EffectsStore.save(selection)
+        applyEffects()
+    }
+
+    /// Decodes the pictures off the main queue, then hands the scene to the camera. If they can't be
+    /// loaded the previous choice comes back.
+    private func applyEffects() {
+        effectsTask?.cancel()
+        guard let client, client.isEffectsAvailable else { return }
+        let selection = effects
+        guard effectsCatalog.hasEffects(selection) else {
+            client.setEffects(nil)
+            appliedEffects = selection
+            effectsStatus = .off
+            return
+        }
+
+        effectsStatus = .loading
+        let catalog = effectsCatalog
+        effectsTask = Task { @MainActor [weak self] in
+            let scene = await Task.detached(priority: .userInitiated) {
+                EffectsScene.load(selection, from: catalog)
+            }.value
+            guard let self, !Task.isCancelled, self.effects == selection, let client = self.client else { return }
+            if let scene {
+                client.setEffects(scene)
+                self.appliedEffects = selection
+                self.effectsStatus = .on
+            } else {
+                self.show("Couldn't load that effect", systemImage: "exclamationmark.triangle.fill")
+                let fallback = self.appliedEffects != selection ? self.appliedEffects : EffectsSelection()
+                self.effects = fallback
+                EffectsStore.save(fallback)
+                self.applyEffects()
+            }
         }
     }
 
@@ -382,12 +423,15 @@ final class CallViewModel {
     private func createClient() {
         let client = WebRTCClient()
         client.delegate = self
+        let savedEffects = effectsCatalog.hasEffects(effects)
+        if savedEffects { client.holdEffects() }
         client.setup(videoTrack: true, audioTrack: true, customFrameCapturer: false, enableE2EE: e2ee)
         client.setRemoteAudioEnabled(!remoteAudioMuted)
         self.client = client
         localTrack = client.localVideoTrack
         frontCamera = client.isFrontCamera
-        virtualBackgroundAvailable = client.isVirtualBackgroundAvailable
+        effectsAvailable = client.isEffectsAvailable
+        if savedEffects { applyEffects() }
     }
 
     private func sendMediaState() {

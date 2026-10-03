@@ -55,8 +55,9 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate {
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var audioSession: AVAudioSession?
     
-    // Virtual background (camera frames only)
-    private var virtualBackgroundProcessor: VirtualBackgroundProcessor?
+    // Backgrounds and stickers (camera frames only)
+    private var effectsProcessor: EffectsProcessor?
+    private var holdsEffectFrames = false
     
     // E2EE properties
     private static let e2eeRatchetSalt = "LKFrameEncryptionKey"
@@ -148,6 +149,7 @@ class WebRTCClient: NSObject, RTCPeerConnectionDelegate {
         (videoCapturer as? RTCFileVideoCapturer)?.stopCapture()
         fileVideoCapturer?.stopCapture()
         fileVideoCapturer = nil
+        effectsProcessor?.setScene(nil)
         
         if self.peerConnection != nil{
             self.peerConnection!.close()
@@ -291,8 +293,9 @@ candidate,
             self.videoCapturer = RTCFileVideoCapturer(delegate: videoSource!)
             #else
             // The capturer only keeps a weak delegate, so the processor is retained here
-            let processor = VirtualBackgroundProcessor(output: videoSource!)
-            self.virtualBackgroundProcessor = processor
+            let processor = EffectsProcessor(output: videoSource!)
+            if holdsEffectFrames { processor.holdFrames() }
+            self.effectsProcessor = processor
             self.videoCapturer = RTCCameraVideoCapturer(delegate: processor)
             #endif
         }
@@ -324,6 +327,7 @@ candidate,
         videoHeight: Int?,
         videoFps: Int
     ) {
+        effectsProcessor?.invalidateAnalysis()
         if let capturer = self.videoCapturer as? RTCCameraVideoCapturer {
             var targetDevice: AVCaptureDevice?
             var targetFormat: AVCaptureDevice.Format?
@@ -1044,18 +1048,22 @@ extension WebRTCClient {
         }
     }
     
-    // MARK: - Virtual Background
-    var isVirtualBackgroundAvailable: Bool {
-        return virtualBackgroundProcessor != nil
+    // MARK: - Effects
+    var isEffectsAvailable: Bool {
+        return effectsProcessor != nil
     }
     
-    var isVirtualBackgroundEnabled: Bool {
-        return virtualBackgroundProcessor?.isEnabled ?? false
+    /// Call before `setup` when a saved effect is about to load: camera frames are dropped until
+    /// `setEffects` so the call never starts with the raw camera.
+    func holdEffects() {
+        holdsEffectFrames = true
+        effectsProcessor?.holdFrames()
     }
     
-    func setVirtualBackground(enabled: Bool) {
-        print("setVirtualBackground: \(enabled)")
-        virtualBackgroundProcessor?.isEnabled = enabled
+    /// Nil sends the camera untouched.
+    func setEffects(_ scene: EffectsScene?) {
+        holdsEffectFrames = false
+        effectsProcessor?.setScene(scene)
     }
 
 }

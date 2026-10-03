@@ -1,7 +1,38 @@
+import javax.inject.Inject
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+/** Copies the repository's effects folder (shared with web and iOS) to assets/effects. */
+abstract class CopyEffectsTask @Inject constructor(private val files: FileSystemOperations) : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val source: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        files.sync {
+            from(source)
+            into(outputDir.dir("effects"))
+            exclude("**/.*")
+        }
+    }
+}
+
+val copyEffects = tasks.register<CopyEffectsTask>("copyEffects") {
+    source.set(rootProject.layout.projectDirectory.dir("../effects"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(copyEffects, CopyEffectsTask::outputDir)
+    }
 }
 
 android {
@@ -38,6 +69,10 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    // MediaPipe memory-maps its models, so they must be stored uncompressed.
+    androidResources {
+        noCompress += "task"
     }
 }
 

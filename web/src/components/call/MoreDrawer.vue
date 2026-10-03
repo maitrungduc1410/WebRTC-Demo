@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { Eye, EyeOff, Maximize, Minimize, PictureInPicture2, SwitchCamera, Volume2, VolumeOff, Wallpaper } from '@lucide/vue'
+import { Eye, EyeOff, Maximize, Minimize, PictureInPicture2, Sparkles, SwitchCamera, Volume2, VolumeOff } from '@lucide/vue'
 import type { Call } from '@/call/useCall'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ const emit = defineEmits<{
   toggleFit: []
   togglePip: []
   switchCamera: []
+  openEffects: []
 }>()
 
 interface Option {
@@ -36,12 +37,13 @@ const options = computed<Option[]>(() => {
   const sharing = call.sharing.value !== 'none'
   const list: Option[] = [
     {
-      id: 'background',
-      icon: Wallpaper,
-      label: call.background.value === 'loading' ? 'Loading background…' : 'Virtual background',
-      checked: call.background.value === 'on',
-      disabled: call.background.value === 'loading' || sharing,
-      run: call.toggleBackground,
+      id: 'effects',
+      icon: Sparkles,
+      label: 'Backgrounds and effects',
+      checked: call.effectsStatus.value === 'on',
+      disabled: sharing,
+      run: () => emit('openEffects'),
+      closes: true,
     },
     {
       id: 'audio',

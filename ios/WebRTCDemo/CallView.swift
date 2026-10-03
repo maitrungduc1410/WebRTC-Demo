@@ -8,7 +8,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum CallSheet: String, Identifiable {
-    case more, chat
+    case more, chat, effects
     var id: String { rawValue }
 }
 
@@ -117,7 +117,8 @@ struct CallView: View {
                     model: model,
                     remoteFit: remoteFit,
                     onToggleFit: { userFit = !remoteFit },
-                    onSwitchCamera: switchCamera
+                    onSwitchCamera: switchCamera,
+                    onOpenEffects: { self.sheet = .effects }
                 )
                 .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
@@ -127,6 +128,10 @@ struct CallView: View {
                     .presentationDragIndicator(.visible)
                     .onAppear { model.openChat() }
                     .onDisappear { model.closeChat() }
+            case .effects:
+                EffectsSheet(model: model)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .videos)

@@ -2,7 +2,7 @@
 
 <div align="center">
 <h3>A comprehensive 1:1 WebRTC demo on Web, Android and iOS</h3>
-<p>Video calls, chat, screen and file sharing, virtual background and end-to-end encryption, with native UIs built in Jetpack Compose (Material 3 Expressive) and SwiftUI (Liquid Glass).</p>
+<p>Video calls, chat, screen and file sharing, backgrounds and face filters, and end-to-end encryption, with native UIs built in Jetpack Compose (Material 3 Expressive) and SwiftUI (Liquid Glass).</p>
 </div>
 
 # Screenshots
@@ -52,7 +52,8 @@ _Recording: `images/demo-ui.gif`, joining a room, dragging the picture-in-pictur
 | Data channel chat                         | ✅   | ✅   | ✅       |
 | Share screen                              | ✅   | ✅   | ✅       |
 | Share video from Photos/Files             | ✅   | ✅   | ✅       |
-| Virtual background                        | ✅   | ✅   | ✅       |
+| Background blur, pictures and videos      | ✅   | ✅   | ✅       |
+| Face-tracked stickers                     | ✅   | ✅   | ✅       |
 | End to end encryption                     | ✅   | ✅   | ✅       |
 | Draggable picture-in-picture self view    | ✅   | ✅   | ✅       |
 | System picture-in-picture (call in a floating window) | ✅   | ✅   | ✅       |
@@ -127,13 +128,13 @@ The Android and iOS call screens work the same way:
 - Double-tap the remote video to switch between fit (whole frame, letterboxed) and fill (cropped to the screen). Screen shares start in fit mode, and so does camera video held the other way round from your screen (a portrait peer on a landscape screen, for example). Rotating starts over from that default.
 - Both screens can be used in landscape. The lobby puts the form next to the title, and the call controls stay clear of the camera cutout and the navigation bar.
 - Drag the picture-in-picture to any corner. To switch between the front and back cameras, double-tap it or use the button at the top right; the preview flips over to the new camera.
-- The toolbar has the microphone, camera, share, chat and more buttons, and hang up. "More" holds the speaker, virtual background, peer audio, peer video, fit/fill and camera switch options.
+- The toolbar has the microphone, camera, share, chat and more buttons, and hang up. "More" holds the speaker, effects, peer audio, peer video, fit/fill and camera switch options.
 - Muting the peer's audio or hiding their video only affects your device. The peer is not told.
 - When the peer turns their camera off, or you hide their video, you see a blurred copy of their last frame with their avatar. The ring around the avatar pulses while they speak.
 
 The web call screen follows the same layout in desktop and phone browsers, with a few differences:
 
-- Move the mouse to show the controls. Toolbar buttons have tooltips with keyboard shortcuts: `M` microphone, `V` camera, `C` chat, `B` virtual background, `F` fit/fill, `P` picture-in-picture.
+- Move the mouse to show the controls. Toolbar buttons have tooltips with keyboard shortcuts: `M` microphone, `V` camera, `C` chat, `B` backgrounds and effects, `F` fit/fill, `P` picture-in-picture.
 - On screens 1024 px and wider, chat opens as a side panel; on smaller screens it opens as a bottom sheet. On phones, "More" opens a sheet with the remaining options.
 - The picture-in-picture button opens the call in a floating window that stays on top of other tabs and apps. In Chrome and Edge it is a full mini call window (remote video, your video, mic, camera and hang-up buttons), and since Chrome 134 it opens by itself when you switch to another tab during a call. Other browsers float the remote video only.
 
@@ -195,10 +196,31 @@ Learn from [Flutter WebRTC Demo](https://github.com/flutter-webrtc/flutter-webrt
 
 For demo purpose, we only support 1:1 call now, but you can extend it to support more peers by implementing a mesh network or using SFU like [mediasoup](https://mediasoup.org/) or [Janus](https://janus.conf.meetecho.com/).
 
-## Virtual background on mobile
+## Backgrounds and effects
 
-- Web: MediaPipe `ImageSegmenter` (`selfie_segmenter`) on a canvas.
-- Android: MediaPipe `tasks-vision` (`selfie_segmenter`, confidence mask) on its own thread, fed with a small upright copy of the camera frame. The person and the background image are composited on the GPU with a GLES shader over the camera texture, so no full-resolution frame is copied to the CPU.
-- iOS: Apple Vision `VNGeneratePersonSegmentationRequest` and Core Image `CIBlendWithMask` on a Metal `CIContext`, inserted as a proxy between `RTCCameraVideoCapturer` and `RTCVideoSource`.
+"Backgrounds and effects" (under More, or `B` on the web) shows a live preview and two tabs: **Backgrounds** (none, slight blur, blur, pictures and looping videos) and **Filters** (stickers that follow your face, like headphones, a crown or glasses). A background and a sticker can be combined. The choice is remembered, and when you join with an effect on, nothing is sent until it is ready, so the peer never sees your real background first.
 
-Virtual background only applies to the camera, not to screen share or file share.
+Effects only apply to the camera, not to screen share or file share.
+
+| | Web | Android | iOS |
+|---|---|---|---|
+| Person mask | MediaPipe `ImageSegmenter` (`selfie_segmenter`) | MediaPipe `tasks-vision` (`selfie_segmenter`) | Vision `VNGeneratePersonSegmentationRequest` |
+| Face points | MediaPipe `FaceLandmarker` | MediaPipe `FaceLandmarker` (`face_landmarker.task`) | Vision `VNDetectFaceLandmarksRequest` |
+| Compositing | canvas 2D | GLES shaders on the camera texture | Core Image on a Metal `CIContext` |
+| Video backgrounds | hidden `<video>` | `MediaPlayer` into an OES texture | `AVPlayer` + `AVPlayerItemVideoOutput` |
+
+### Adding backgrounds
+
+All three apps bundle the [`effects`](effects) folder at the repository root, so a background added there shows up everywhere.
+
+1. Put the original pictures (`.jpg` `.jpeg` `.png` `.webp`) and videos (`.mp4` `.mov` `.webm` `.mkv`) in `effects-source/` at the repository root (ignored by git). Name them in kebab-case after what they show, e.g. `cozy-living-room.jpg`, `beach-sunset.mp4`. The name becomes the id, and the title shown in the app ("Cozy living room").
+2. Run `python3 tools/prepare_effects.py` (needs `ffmpeg` and `ffprobe`). Pictures are resized to 1920 px on the long side; videos to 1280 px, at most 15 s, 30 fps, H.264 without audio. Each gets a 320×180 thumbnail, and `effects/backgrounds.json` is rewritten. Use `--force` to encode everything again.
+3. Optionally edit the `name` fields in `effects/backgrounds.json`; they are kept the next time the script runs.
+
+Stickers are listed in `effects/stickers.json`. Sizes and offsets are measured in distances between the eyes, from the eyes, nose or mouth (`anchor`); a positive `offsetY` moves the sticker up the face.
+
+### Credits
+
+- Stickers are based on [Noto Emoji](https://github.com/googlefonts/noto-emoji) (Apache License 2.0, see [`effects/stickers/LICENSE`](effects/stickers/LICENSE)). The headphones were reshaped and recoloured.
+- Background pictures and videos come from [Pexels](https://www.pexels.com) under the [Pexels license](https://www.pexels.com/license/).
+- The MediaPipe models (`selfie_segmenter`, `face_landmarker`) are bundled with the Android app and loaded from MediaPipe's model storage on the web; see their model cards for terms.

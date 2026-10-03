@@ -1,0 +1,88 @@
+{
+  "backgrounds": [
+    {
+      "id": "1",
+      "name": "1",
+      "type": "image",
+      "file": "backgrounds/1.jpg",
+      "thumbnail": "thumbnails/1.jpg"
+    },
+    {
+      "id": "2",
+      "name": "2",
+      "type": "image",
+      "file": "backgrounds/2.jpg",
+      "thumbnail": "thumbnails/2.jpg"
+    },
+    {
+      "id": "3",
+      "name": "3",
+      "type": "image",
+      "file": "backgrounds/3.jpg",
+      "thumbnail": "thumbnails/3.jpg"
+    },
+    {
+      "id": "4",
+      "name": "4",
+      "type": "image",
+      "file": "backgrounds/4.jpg",
+      "thumbnail": "thumbnails/4.jpg"
+    },
+    {
+      "id": "5",
+      "name": "5",
+      "type": "image",
+      "file": "backgrounds/5.jpg",
+      "thumbnail": "thumbnails/5.jpg"
+    },
+    {
+      "id": "6",
+      "name": "6",
+      "type": "image",
+      "file": "backgrounds/6.jpg",
+      "thumbnail": "thumbnails/6.jpg"
+    },
+    {
+      "id": "7",
+      "name": "7",
+      "type": "image",
+      "file": "backgrounds/7.jpg",
+      "thumbnail": "thumbnails/7.jpg"
+    },
+    {
+      "id": "8",
+      "name": "8",
+      "type": "image",
+      "file": "backgrounds/8.jpg",
+      "thumbnail": "thumbnails/8.jpg"
+    },
+    {
+      "id": "9",
+      "name": "9",
+      "type": "image",
+      "file": "backgrounds/9.jpg",
+      "thumbnail": "thumbnails/9.jpg"
+    },
+    {
+      "id": "10",
+      "name": "10",
+      "type": "video",
+      "file": "backgrounds/10.mp4",
+      "thumbnail": "thumbnails/10.jpg"
+    },
+    {
+      "id": "11",
+      "name": "11",
+      "type": "video",
+      "file": "backgrounds/11.mp4",
+      "thumbnail": "thumbnails/11.jpg"
+    },
+    {
+      "id": "12",
+      "name": "12",
+      "type": "video",
+      "file": "backgrounds/12.mp4",
+      "thumbnail": "thumbnails/12.jpg"
+    }
+  ]
+}

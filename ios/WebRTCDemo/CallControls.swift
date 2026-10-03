@@ -172,6 +172,7 @@ struct MoreSheet: View {
     let remoteFit: Bool
     let onToggleFit: () -> Void
     let onSwitchCamera: () -> Void
+    let onOpenEffects: () -> Void
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
 
@@ -191,13 +192,13 @@ struct MoreSheet: View {
                         action: model.toggleSpeaker
                     )
                     OptionTile(
-                        systemImage: "person.and.background.dotted",
-                        title: "Background",
-                        detail: model.virtualBackgroundAvailable ? (model.virtualBackground ? "On" : "Off") : "Unavailable",
-                        active: model.virtualBackground,
-                        action: model.toggleVirtualBackground
+                        systemImage: "sparkles",
+                        title: "Effects",
+                        detail: effectsDetail,
+                        active: model.effectsStatus == .on,
+                        action: onOpenEffects
                     )
-                    .disabled(!model.virtualBackgroundAvailable)
+                    .disabled(!model.effectsAvailable || model.sharing != .none)
                     OptionTile(
                         systemImage: model.remoteAudioMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                         title: "Peer audio",
@@ -240,6 +241,16 @@ struct MoreSheet: View {
             .padding(20)
         }
         .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private var effectsDetail: String {
+        guard model.effectsAvailable else { return "Unavailable" }
+        guard model.sharing == .none else { return "Paused while presenting" }
+        switch model.effectsStatus {
+        case .off: return "Backgrounds and filters"
+        case .loading: return "Loading…"
+        case .on: return "On"
+        }
     }
 }
 

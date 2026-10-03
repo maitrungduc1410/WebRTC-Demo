@@ -108,6 +108,8 @@ import com.example.myapplication.call.CallViewModel
 import com.example.myapplication.call.ChatMessage
 import com.example.myapplication.call.ConnectionPhase
 import com.example.myapplication.call.Sharing
+import com.example.myapplication.effects.EffectsCatalog
+import com.example.myapplication.effects.EffectsSelection
 import com.example.myapplication.ui.video.VideoRenderer
 import com.example.myapplication.ui.video.VideoSurface
 import kotlinx.coroutines.CompletableDeferred
@@ -120,7 +122,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
-enum class CallSheet { None, More, Share, Chat }
+enum class CallSheet { None, More, Share, Chat, Effects }
 
 private const val CONTROLS_AUTO_HIDE_MS = 5_000L
 private const val BUBBLE_LIFETIME_MS = 6_000L
@@ -135,7 +137,7 @@ class CallActions(
     val toggleSpeaker: () -> Unit = {},
     val toggleRemoteAudio: () -> Unit = {},
     val toggleRemoteVideo: () -> Unit = {},
-    val toggleVirtualBackground: () -> Unit = {},
+    val setEffects: (EffectsSelection) -> Unit = {},
     val stopSharing: () -> Unit = {},
     val shareScreen: () -> Unit = {},
     val shareFromGallery: () -> Unit = {},
@@ -175,7 +177,7 @@ fun CallScreen(
             toggleSpeaker = vm::toggleSpeaker,
             toggleRemoteAudio = vm::toggleRemoteAudio,
             toggleRemoteVideo = vm::toggleRemoteVideo,
-            toggleVirtualBackground = vm::toggleVirtualBackground,
+            setEffects = vm::setEffects,
             stopSharing = vm::stopSharing,
             shareScreen = onShareScreen,
             shareFromGallery = onShareFromGallery,
@@ -196,6 +198,7 @@ fun CallScreen(
         audioLevel = audioLevel,
         events = vm.events,
         actions = actions,
+        effectsCatalog = vm.effectsCatalog,
         remoteFrameSize = remoteFrameSize,
         remoteVideo = { fit, modifier ->
             VideoSurface(
@@ -238,6 +241,7 @@ fun CallContent(
     localVideo: @Composable (mirror: Boolean, onFrameSize: (IntSize) -> Unit, modifier: Modifier) -> Unit,
     events: Flow<String> = emptyFlow(),
     initialSheet: CallSheet = CallSheet.None,
+    effectsCatalog: EffectsCatalog = EffectsCatalog(EffectsCatalog.BUILT_IN, emptyList()),
     /** The system picture-in-picture window: only the video, no controls. */
     inPip: Boolean = false,
     /** Rotated size of the peer's frames, or zero before the first one. */
@@ -433,7 +437,7 @@ fun CallContent(
             onToggleSpeaker = { toggle(ui.speakerOn, actions.toggleSpeaker) },
             onToggleRemoteAudio = { toggle(!ui.remoteAudioMuted, actions.toggleRemoteAudio) },
             onToggleRemoteVideo = { toggle(!ui.remoteVideoHidden, actions.toggleRemoteVideo) },
-            onToggleVirtualBackground = { toggle(ui.virtualBackground, actions.toggleVirtualBackground) },
+            onOpenEffects = { sheet = CallSheet.Effects },
             onToggleFit = { userFit = !remoteFit },
             onSwitchCamera = ::switchCamera
         )
@@ -447,6 +451,13 @@ fun CallContent(
             ui = ui,
             onSend = actions.sendMessage,
             onDismiss = { sheet = CallSheet.None }
+        )
+        CallSheet.Effects -> EffectsSheet(
+            ui = ui,
+            catalog = effectsCatalog,
+            onSelect = actions.setEffects,
+            onDismiss = { sheet = CallSheet.None },
+            preview = { modifier -> localVideo(ui.frontCamera && ui.sharing == Sharing.None, {}, modifier) }
         )
         CallSheet.None -> {}
     }

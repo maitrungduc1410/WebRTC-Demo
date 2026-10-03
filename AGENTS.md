@@ -87,6 +87,7 @@ App.vue
 ├── Media Stream Management
 │   ├── Local Camera/Microphone
 │   ├── Screen Sharing
+│   ├── Backgrounds and effects (src/effects/, MediaPipe + canvas)
 │   └── Remote Stream
 ├── Data Channel
 └── E2EE (End-to-End Encryption)
@@ -163,7 +164,9 @@ WebRTCDemo (Main App)
 ├── PeerPlaceholderView.swift (Blurred last frame + speaking avatar)
 ├── VideoView.swift (RTCMTLVideoView wrapper, FrameSnapshotter)
 ├── PeerConnectionClient.swift (WebRTC logic)
-├── VirtualBackgroundProcessor.swift (Vision + Core Image virtual background)
+├── EffectsCatalog.swift (bundled effects folder, saved selection, sticker placement)
+├── EffectsProcessor.swift (Vision + Core Image backgrounds and face stickers)
+├── EffectsSheet.swift (Backgrounds and filters picker with a live preview)
 ├── RTCCustomFrameCapturer.swift (Custom video capture)
 ├── RTCFileVideoCapturer+URL.swift (Video file capture)
 ├── FlutterBroadcastScreenCapturer.h/m (Screen capturer fed by the extension)
@@ -242,13 +245,14 @@ android/app/src/main/java/com/example/myapplication/
 ├── CallActivity.kt (hosts CallScreen: permissions, pickers, MediaProjection)
 ├── ScreenCaptureService.kt (foreground service for screen capture)
 ├── call/CallViewModel.kt (call state as StateFlow, owns PeerConnectionClient + EglBase)
+├── effects/EffectsCatalog.kt (reads assets/effects, saved selection)
 ├── settings/SignalingServer.kt (saved server address, normalization)
 ├── ui/
 │   ├── lobby/LobbyScreen.kt
-│   ├── call/ (CallScreen, CallControls, ChatSheet, PeerPlaceholder, CallPreviews)
+│   ├── call/ (CallScreen, CallControls, ChatSheet, EffectsSheet, PeerPlaceholder, CallPreviews)
 │   ├── video/ (TextureViewRenderer, VideoRenderer, FrameSnapshotter)
 │   └── theme/Theme.kt (MaterialExpressiveTheme, dynamic color)
-└── webrtc/ (PeerConnectionClient, WebRtcPeer, RtcListener, SignalingHandler, E2eeManager, Mp4VideoCapturer, vbg/)
+└── webrtc/ (PeerConnectionClient, WebRtcPeer, RtcListener, SignalingHandler, E2eeManager, Mp4VideoCapturer, effects/)
 ```
 
 **Key Features:**
@@ -431,7 +435,8 @@ Rooms are temporary and in-memory:
 | Screen Sharing            | ✅  | ✅      | ✅  |
 | Data Channel Messaging    | ✅  | ✅      | ✅  |
 | End-to-End Encryption     | ✅  | ✅      | ✅  |
-| Virtual Background        | ✅  | ✅      | ✅  |
+| Backgrounds (blur, picture, video) | ✅  | ✅      | ✅  |
+| Face Stickers             | ✅  | ✅      | ✅  |
 | Stream Video File         | ✅  | ✅      | ✅  |
 | Camera/Mic State to Peer  | ✅  | ✅      | ✅  |
 | Hide Remote Video Locally | ✅  | ✅      | ✅  |
@@ -481,7 +486,6 @@ Rooms are temporary and in-memory:
 6. **Advanced Features**
    - Simulcast for adaptive bitrate
    - SVC (Scalable Video Coding)
-   - Background blur
    - Noise suppression
 
 ## Security Considerations
@@ -511,6 +515,7 @@ Rooms are temporary and in-memory:
 - **Reusability**: Platform-specific wrappers around WebRTC
 - **Error Handling**: Comprehensive error handling for network issues
 - **Logging**: Debug logs for troubleshooting
+- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by all three apps. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see the README); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`) in sync across platforms
 
 ### Testing Strategies
 
