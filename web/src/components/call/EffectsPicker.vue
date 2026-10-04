@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Ban, Droplet, Droplets, Loader2, Play, VideoOff } from '@lucide/vue'
-import type { Call } from '@/call/useCall'
+import type { EffectsControls } from '@/call/types'
 import StreamVideo from '@/components/video/StreamVideo.vue'
 import { backgrounds, stickers, type BackgroundOption } from '@/effects/catalog'
 import { cn } from '@/lib/utils'
 
-const props = defineProps<{ call: Call }>()
+const props = defineProps<{ call: EffectsControls }>()
 const call = props.call
 
 type Tab = 'backgrounds' | 'filters'

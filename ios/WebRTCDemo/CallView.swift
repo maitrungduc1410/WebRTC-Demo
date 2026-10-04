@@ -7,8 +7,8 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum CallSheet: String, Identifiable {
-    case more, chat, effects
+enum CallSheet: String, Identifiable {
+    case more, chat, effects, people
     var id: String { rawValue }
 }
 
@@ -132,7 +132,19 @@ struct CallView: View {
                 EffectsSheet(model: model)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+            case .people:
+                // Group calls only.
+                EmptyView()
             }
+        }
+        .alert(
+            "Call ended",
+            isPresented: Binding(get: { model.endedMessage != nil }, set: { _ in }),
+            presenting: model.endedMessage
+        ) { _ in
+            Button("Back to lobby", action: leave)
+        } message: { message in
+            Text(message)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .videos)
         .onChange(of: photoItem) { _, item in
@@ -318,13 +330,52 @@ struct CallView: View {
 
 // MARK: - Local preview
 
+/// The three bars Google Meet shows on your own video, so you can see the call hears you.
+/// Reads `micLevel` itself, so only the bars redraw while you talk.
+struct MicLevelIndicator: View {
+    let model: CallViewModel
+    let large: Bool
+
+    /// The middle bar moves the most.
+    private static let barGains: [Double] = [0.6, 1, 0.6]
+
+    var body: some View {
+        let muted = !model.micOn
+        let level = muted ? 0 : model.micLevel
+        let barWidth: CGFloat = large ? 5 : 3
+        let maxBar: CGFloat = large ? 22 : 12
+        ZStack {
+            if muted {
+                Image(systemName: "mic.slash.fill")
+                    .font((large ? Font.title3 : .caption).weight(.bold))
+                    .foregroundStyle(Color(hex: 0xE5484D))
+                    .transition(.scale.combined(with: .opacity))
+            } else {
+                HStack(spacing: large ? 4 : 3) {
+                    ForEach(Self.barGains.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(.white)
+                            .frame(width: barWidth, height: barWidth + (maxBar - barWidth) * CGFloat(level * Self.barGains[index]))
+                    }
+                }
+                .animation(.easeOut(duration: 0.1), value: level)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .frame(width: large ? 48 : 28, height: large ? 48 : 28)
+        .glassEffect(.regular.tint(.black.opacity(0.35)), in: .circle)
+        .animation(.spring(response: 0.35, dampingFraction: 0.65), value: muted)
+        .accessibilityLabel(muted ? "Microphone off" : "Your microphone level")
+    }
+}
+
 private enum Corner {
     case topLeading, topTrailing, bottomLeading, bottomTrailing
 }
 
 /// The local camera: full screen while alone, then it shrinks into a draggable picture-in-picture
 /// that snaps to the nearest corner. Double-tap the PiP to flip to the other camera.
-private struct LocalTile: View {
+struct LocalTile: View {
     let model: CallViewModel
     let pip: Bool
     /// Size of the safe area; positions are in its coordinate space.
@@ -436,10 +487,26 @@ private struct LocalTile: View {
             if !model.micOn && pip {
                 Image(systemName: "mic.slash.fill")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(hex: 0xE5484D))
                     .frame(width: 28, height: 28)
                     .glassEffect(.regular.tint(.black.opacity(0.35)), in: .circle)
                     .padding(8)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        // Your microphone: in the corner of the picture-in-picture (the badge above marks it muted),
+        // on the left edge while the tile is the whole screen.
+        .overlay(alignment: .bottomTrailing) {
+            if model.micOn && pip {
+                MicLevelIndicator(model: model, large: false)
+                    .padding(8)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .overlay(alignment: .leading) {
+            if !pip {
+                MicLevelIndicator(model: model, large: true)
+                    .padding(.leading, insets.leading + margin)
                     .transition(.scale.combined(with: .opacity))
             }
         }
@@ -495,7 +562,7 @@ private struct LocalTile: View {
 
 // MARK: - Pieces
 
-private struct RoomPill: View {
+struct RoomPill: View {
     let model: CallViewModel
 
     @State private var pulsing = false
@@ -552,20 +619,22 @@ private struct RoomPill: View {
     }
 }
 
-private struct StatusChip: View {
+struct StatusChip: View {
     let systemImage: String
     let text: String
+    /// Inside a button: the glass reacts to touches.
+    var interactive = false
 
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .glassEffect(.regular, in: .capsule)
+            .glassEffect(interactive ? .regular.interactive() : .regular, in: .capsule)
     }
 }
 
-private struct WaitingCard: View {
+struct WaitingCard: View {
     let model: CallViewModel
 
     @State private var copied = false
@@ -613,7 +682,7 @@ private struct WaitingCard: View {
 }
 
 /// The last few chat messages float over the video for a few seconds.
-private struct RecentMessages: View {
+struct RecentMessages: View {
     let messages: [ChatMessage]
     let visible: Bool
 
@@ -627,7 +696,7 @@ private struct RecentMessages: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(shown) { message in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(message.isLocal ? "You" : "Peer")
+                        Text(message.isLocal ? "You" : message.sender ?? "Peer")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(message.text)
@@ -653,7 +722,7 @@ private struct RecentMessages: View {
 // MARK: - Video import
 
 /// A video picked from Photos, copied into the app's documents so it outlives the picker.
-private struct PickedVideo: Transferable {
+struct PickedVideo: Transferable {
     let url: URL
 
     static var transferRepresentation: some TransferRepresentation {
@@ -665,7 +734,7 @@ private struct PickedVideo: Transferable {
     }
 }
 
-private enum VideoImport {
+enum VideoImport {
     static func copyToDocuments(_ url: URL) throws -> URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let destination = documents.appendingPathComponent(url.lastPathComponent)

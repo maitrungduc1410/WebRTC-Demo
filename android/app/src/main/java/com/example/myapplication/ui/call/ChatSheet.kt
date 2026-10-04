@@ -88,7 +88,7 @@ fun ChatSheet(ui: CallUiState, onSend: (String) -> Unit, onDismiss: () -> Unit) 
                 AnimatedContent(targetState = ui.chat to ui.phase, label = "chatStatus") { (chat, phase) ->
                     when {
                         chat == ChatStatus.Open -> Text(
-                            "Data channel open",
+                            if (ui.group) "Connected" else "Data channel open",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -109,7 +109,8 @@ fun ChatSheet(ui: CallUiState, onSend: (String) -> Unit, onDismiss: () -> Unit) 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (ui.messages.isEmpty()) {
                     Text(
-                        "Messages travel peer-to-peer over an RTCDataChannel.",
+                        if (ui.group) "Messages go to everyone in the room through the SFU server."
+                        else "Messages travel peer-to-peer over an RTCDataChannel.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.Center)
@@ -168,6 +169,13 @@ private fun MessageBubble(message: ChatMessage, modifier: Modifier = Modifier) {
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                if (!message.isLocal && message.sender != null) {
+                    Text(
+                        message.sender,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.primary
+                    )
+                }
                 Text(message.text, style = MaterialTheme.typography.bodyLarge)
                 Text(
                     time,

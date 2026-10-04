@@ -25,7 +25,7 @@ struct EffectsSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Backgrounds and effects")
                         .font(.title3.weight(.semibold))
-                    Text("Only your camera changes. The other person sees what your preview shows.")
+                    Text("Only your camera changes. Others in the call see what your preview shows.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

@@ -1,96 +1,108 @@
 package com.example.myapplication.webrtc
 
+import android.util.Base64
 import android.util.Log
-import io.socket.client.Socket
-import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
 
 /**
- * Handles Socket.io signaling for WebRTC peer connection.
+ * Signaling of a 1:1 call over the signaling server's WebSocket (protocol in ARCHITECTURE.md).
+ * Socket events arrive on the main thread; the send functions may be called from any thread.
  */
 class SignalingHandler(
-    private val socket: Socket,
+    url: String,
     private val roomId: String,
     private val onPeerCreated: () -> WebRtcPeer,
     private val getPeer: () -> WebRtcPeer?,
-    private val onReconnected: () -> Unit,
     private val onRemoteMediaState: (MediaState) -> Unit,
+    /** The socket closed or the server refused us; there is no reconnect. */
+    private val onCallEnded: (String) -> Unit,
     private val e2ee: E2eeManager? = null
-) {
+) : SignalingSocket.Events {
+
     companion object {
         private const val TAG = "SignalingHandler"
     }
 
-    @Volatile
-    private var connectedBefore = false
+    private val socket = SignalingSocket(url, this)
 
-    fun setupListeners() {
-        socket.on(Socket.EVENT_CONNECT, onConnect)
-        socket.on("new user joined", onNewUserJoined)
-        socket.on("offer", onOffer)
-        socket.on("answer", onAnswer)
-        socket.on("new ice candidate", onNewIceCandidate)
-        socket.on("receive encryption key", onReceiveEncryptionKey)
-        socket.on("remote peer received encryption key", onRemotePeerReceivedEncryptionKey)
-        socket.on("media state", onMediaState)
-        socket.on(Socket.EVENT_DISCONNECT, onDisconnect)
+    fun connect() = socket.connect()
+
+    /** Sends `leave` and closes the socket. */
+    fun close() = socket.close()
+
+    // ========== SignalingSocket.Events ==========
+
+    override fun onOpen() {
+        socket.send("join") { put("roomId", roomId) }
     }
 
-    private val onConnect = io.socket.emitter.Emitter.Listener {
-        // The server dropped us from the room while we were offline; the peer still in it
-        // starts a new call once we rejoin, so the old one has to go.
-        if (connectedBefore) {
-            Log.d(TAG, "Socket reconnected, rejoining the room")
-            onReconnected()
-        }
-        connectedBefore = true
-        val obj = JSONObject()
-        try {
-            obj.put("roomId", roomId)
-            socket.emit("join room", obj)
-        } catch (e: Exception) {
-            e.printStackTrace()
+    override fun onMessage(type: String, message: JSONObject) {
+        when (type) {
+            "peer joined" -> onPeerJoined()
+            "offer" -> onOffer(message.optString("sdp"))
+            "answer" -> getPeer()?.setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, message.optString("sdp")))
+            "candidate" -> onRemoteCandidate(message.optJSONObject("candidate"))
+            "encryption key" -> onEncryptionKey(message.optString("key"))
+            "encryption key received" -> Log.d(TAG, "Remote peer received the encryption key")
+            "media state" -> onMediaState(message.optJSONObject("state"))
+            "error" -> onServerError(message)
         }
     }
 
-    private val onDisconnect = io.socket.emitter.Emitter.Listener {
-        Log.d(TAG, "Socket disconnected")
+    override fun onClosed(opened: Boolean) {
+        onCallEnded(if (opened) "Lost the connection to the signaling server" else "Couldn't reach the signaling server")
     }
 
-    private val onNewUserJoined = io.socket.emitter.Emitter.Listener {
+    // ========== Incoming ==========
+
+    /** The other person just joined our room: we start the call. */
+    private fun onPeerJoined() {
         val peer = onPeerCreated()
-        // The server relays on the same socket in order, so the key reaches the remote before the offer.
+        // The server relays in order on one socket, so the key reaches the remote before the offer.
         e2ee?.let { sendEncryptionKey(it) }
         peer.createOffer()
     }
 
-    private val onReceiveEncryptionKey = io.socket.emitter.Emitter.Listener { args ->
-        val data = args.getOrNull(0) as? JSONObject
-        val key = parseKey(data?.opt("encryptionKey"))
+    private fun onOffer(sdp: String) {
+        // A peer disposes itself when ICE disconnects; a later offer starts a new one.
+        val peer = getPeer() ?: onPeerCreated()
+        peer.setRemoteDescription(SessionDescription(SessionDescription.Type.OFFER, sdp))
+        peer.createAnswer()
+    }
+
+    private fun onRemoteCandidate(json: JSONObject?) {
+        val sdp = json?.optString("candidate").orEmpty()
+        if (sdp.isEmpty()) return
+        val candidate = IceCandidate(
+            if (json!!.isNull("sdpMid")) "" else json.optString("sdpMid"),
+            json.optInt("sdpMLineIndex", 0),
+            sdp
+        )
+        getPeer()?.addIceCandidate(candidate)
+    }
+
+    private fun onEncryptionKey(encoded: String) {
         if (e2ee == null) {
             Log.w(TAG, "Received an encryption key but E2EE is disabled; remote media will not decode")
-            return@Listener
+            return
         }
-        if (key == null) {
-            Log.e(TAG, "receive encryption key: missing or non-binary encryptionKey")
-            return@Listener
+        val key = try {
+            Base64.decode(encoded, Base64.DEFAULT)
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+        if (key == null || key.isEmpty()) {
+            Log.e(TAG, "encryption key: missing or not base64")
+            return
         }
         e2ee.setSharedKey(key)
-        try {
-            socket.emit("encryption key received", JSONObject().put("roomId", roomId))
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        socket.send("encryption key received")
     }
 
-    private val onRemotePeerReceivedEncryptionKey = io.socket.emitter.Emitter.Listener {
-        Log.d(TAG, "Remote peer received encryption key")
-    }
-
-    private val onMediaState = io.socket.emitter.Emitter.Listener { args ->
-        val state = (args.getOrNull(0) as? JSONObject)?.optJSONObject("state") ?: return@Listener
+    private fun onMediaState(state: JSONObject?) {
+        state ?: return
         onRemoteMediaState(
             MediaState(
                 audio = state.optBoolean("audio", true),
@@ -100,157 +112,48 @@ class SignalingHandler(
         )
     }
 
-    fun sendMediaState(state: MediaState) {
-        try {
-            val payload = JSONObject().apply {
-                put("roomId", roomId)
-                put("state", JSONObject().apply {
-                    put("audio", state.audio)
-                    put("video", state.video)
-                    put("screen", state.screen)
-                })
-            }
-            socket.emit("media state", payload)
-        } catch (e: Exception) {
-            e.printStackTrace()
+    private fun onServerError(message: JSONObject) {
+        val text = message.optString("message")
+        if (!message.optBoolean("fatal")) {
+            Log.w(TAG, "Server: $text")
+            return
         }
+        onCallEnded(if (text == "Room is full") "That room already has two people in it" else text)
     }
 
-    /** Binary attachments arrive as ByteArray; a JSON number array is accepted as a fallback. */
-    private fun parseKey(value: Any?): ByteArray? = when (value) {
-        is ByteArray -> value
-        is JSONArray -> ByteArray(value.length()) { value.getInt(it).toByte() }
-        else -> null
-    }
+    // ========== Outgoing ==========
 
     private fun sendEncryptionKey(e2ee: E2eeManager) {
         val material = e2ee.generateKeyMaterial()
         e2ee.setSharedKey(material)
-        try {
-            // socket.io-client sends ByteArray values as binary attachments (ArrayBuffer on web).
-            val payload = JSONObject().apply {
-                put("roomId", roomId)
-                put("encryptionKey", material)
-            }
-            socket.emit("send encryption key", payload)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        socket.send("encryption key") { put("key", Base64.encodeToString(material, Base64.NO_WRAP)) }
     }
 
-    private val onOffer = io.socket.emitter.Emitter.Listener { args ->
-        val data = args[0] as JSONObject
-
-        // Get or create peer connection
-        val peer = getPeer() ?: onPeerCreated()
-
-        try {
-            val offer = data.getJSONObject("offer")
-            val sdp = SessionDescription(
-                SessionDescription.Type.fromCanonicalForm(offer.getString("type")),
-                offer.getString("sdp")
-            )
-            peer.setRemoteDescription(sdp)
-            peer.createAnswer()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private val onAnswer = io.socket.emitter.Emitter.Listener { args ->
-        val data = args[0] as JSONObject
-        try {
-            val answer = data.getJSONObject("answer")
-            val sdp = SessionDescription(
-                SessionDescription.Type.fromCanonicalForm(answer.getString("type")),
-                answer.getString("sdp")
-            )
-            getPeer()?.setRemoteDescription(sdp)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private val onNewIceCandidate = io.socket.emitter.Emitter.Listener { args ->
-        val data = args[0] as JSONObject
-        try {
-            val iceCandidate = data.getJSONObject("iceCandidate")
-            val candidate = IceCandidate(
-                iceCandidate.getString("sdpMid"),
-                iceCandidate.getInt("sdpMLineIndex"),
-                iceCandidate.getString("candidate")
-            )
-            getPeer()?.addIceCandidate(candidate)
-        } catch (e: Exception) {
-            e.printStackTrace()
+    fun sendMediaState(state: MediaState) {
+        socket.send("media state") {
+            put("state", JSONObject().apply {
+                put("audio", state.audio)
+                put("video", state.video)
+                put("screen", state.screen)
+            })
         }
     }
 
     fun sendOffer(sdp: SessionDescription) {
-        sendSdp(sdp, "offer")
+        socket.send("offer") { put("sdp", sdp.description) }
     }
 
     fun sendAnswer(sdp: SessionDescription) {
-        sendSdp(sdp, "answer")
-    }
-
-    private fun sendSdp(sdp: SessionDescription, type: String) {
-        if (dropWhileOffline(type)) return
-        try {
-            val payload = JSONObject()
-            val desc = JSONObject().apply {
-                put("type", sdp.type.canonicalForm())
-                put("sdp", sdp.description)
-            }
-
-            payload.put(type, desc)
-            payload.put("roomId", roomId)
-
-            socket.emit(type, payload)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        socket.send("answer") { put("sdp", sdp.description) }
     }
 
     fun sendIceCandidate(candidate: IceCandidate) {
-        if (dropWhileOffline("new ice candidate")) return
-        try {
-            val payload = JSONObject()
-            val iceCandidate = JSONObject().apply {
-                put("sdpMLineIndex", candidate.sdpMLineIndex)
-                put("sdpMid", candidate.sdpMid)
+        socket.send("candidate") {
+            put("candidate", JSONObject().apply {
                 put("candidate", candidate.sdp)
-            }
-
-            payload.put("iceCandidate", iceCandidate)
-            payload.put("roomId", roomId)
-
-            socket.emit("new ice candidate", payload)
-        } catch (e: Exception) {
-            e.printStackTrace()
+                put("sdpMid", candidate.sdpMid ?: JSONObject.NULL)
+                put("sdpMLineIndex", candidate.sdpMLineIndex)
+            })
         }
-    }
-
-    /**
-     * socket.io buffers emits while offline and flushes them on reconnect, before we rejoin. They
-     * belong to a call that the reconnect ends, and would reach the remote's new call.
-     */
-    private fun dropWhileOffline(event: String): Boolean {
-        if (socket.connected()) return false
-        Log.w(TAG, "Socket offline, dropping $event")
-        return true
-    }
-
-    fun disconnect() {
-        socket.off(Socket.EVENT_CONNECT, onConnect)
-        socket.off("new user joined", onNewUserJoined)
-        socket.off("offer", onOffer)
-        socket.off("answer", onAnswer)
-        socket.off("new ice candidate", onNewIceCandidate)
-        socket.off("receive encryption key", onReceiveEncryptionKey)
-        socket.off("remote peer received encryption key", onRemotePeerReceivedEncryptionKey)
-        socket.off("media state", onMediaState)
-        socket.off(Socket.EVENT_DISCONNECT, onDisconnect)
-        socket.close()
     }
 }

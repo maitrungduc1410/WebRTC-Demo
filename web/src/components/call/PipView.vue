@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Mic, MicOff, MonitorUp, PhoneOff, Video, VideoOff } from '@lucide/vue'
-import type { Call } from '@/call/useCall'
+import type { PipControls } from '@/call/types'
 import StreamVideo from '@/components/video/StreamVideo.vue'
 import PeerPlaceholder from './PeerPlaceholder.vue'
 import { cn } from '@/lib/utils'
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 // is hidden while this window shows, and its requestAnimationFrame (which Motion uses) is paused.
 
 const props = defineProps<{
-  call: Call
+  call: PipControls
   fit: boolean
 }>()
 

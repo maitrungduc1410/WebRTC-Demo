@@ -18,6 +18,7 @@ private struct CallRoute: Identifiable {
     let id = UUID()
     let roomId: String
     let e2ee: Bool
+    let group: Bool
 }
 
 private struct RootView: View {
@@ -25,14 +26,20 @@ private struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            LobbyView { roomId, e2ee in
-                call = CallRoute(roomId: roomId, e2ee: e2ee)
+            LobbyView { roomId, e2ee, group in
+                call = CallRoute(roomId: roomId, e2ee: e2ee, group: group)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
         .fullScreenCover(item: $call) { route in
-            CallView(roomId: route.roomId, e2ee: route.e2ee) {
-                call = nil
+            if route.group {
+                GroupCallView(roomId: route.roomId, e2ee: route.e2ee) {
+                    call = nil
+                }
+            } else {
+                CallView(roomId: route.roomId, e2ee: route.e2ee) {
+                    call = nil
+                }
             }
         }
     }

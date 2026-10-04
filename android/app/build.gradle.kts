@@ -95,7 +95,8 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 
-    implementation("io.socket:socket.io-client:2.1.2")
+    // Signaling WebSocket of both call modes
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     implementation("io.github.webrtc-sdk:android:150.7871.01")
 //    implementation("io.getstream:stream-webrtc-android:1.1.3") // same WebRTC API, no code change required

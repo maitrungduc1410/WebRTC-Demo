@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.R
+import com.example.myapplication.settings.SfuServer
 import com.example.myapplication.settings.SignalingServer
 import com.example.myapplication.ui.theme.AppTheme
 import kotlinx.coroutines.launch
@@ -78,16 +79,22 @@ import kotlin.random.Random
 
 private fun randomRoomId(): String = Random.nextInt(100000, 1_000_000).toString()
 
+/** A server address shown and edited in the lobby, saved by the caller. */
+class ServerSettings(val address: String, val defaultAddress: String, val onChange: (String) -> Unit)
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LobbyScreen(
     serverAddress: String,
     defaultServerAddress: String,
     onServerAddressChange: (String) -> Unit,
-    onJoin: (roomId: String, e2ee: Boolean) -> Unit
+    /** The group call (SFU) server, used instead of the signaling server when group mode is on. */
+    sfu: ServerSettings,
+    onJoin: (roomId: String, e2ee: Boolean, group: Boolean) -> Unit
 ) {
     var roomId by rememberSaveable { mutableStateOf(randomRoomId()) }
     var e2ee by rememberSaveable { mutableStateOf(false) }
+    var group by rememberSaveable { mutableStateOf(false) }
     var editingServer by rememberSaveable { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -97,7 +104,7 @@ fun LobbyScreen(
     fun join() {
         if (roomId.isBlank()) return
         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-        onJoin(roomId.trim(), e2ee)
+        onJoin(roomId.trim(), e2ee, group)
     }
 
     val header: @Composable () -> Unit = {
@@ -169,7 +176,8 @@ fun LobbyScreen(
                         Column(Modifier.weight(1f)) {
                             Text("End-to-end encryption", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Encrypt every frame with a key only the two of you share",
+                                if (group) "Encrypt every frame with a key only the people in the room share"
+                                else "Encrypt every frame with a key only the two of you share",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
@@ -185,6 +193,35 @@ fun LobbyScreen(
                     }
                 }
 
+                Spacer(Modifier.height(8.dp))
+
+                // Advanced and opt-in: a quieter row than E2EE, and the call stays 1:1 unless it is on.
+                val groupContainer by animateColorAsState(
+                    if (group) colors.secondaryContainer else Color.Transparent,
+                    label = "groupContainer"
+                )
+                Surface(
+                    onClick = { group = !group },
+                    shape = RoundedCornerShape(24.dp),
+                    color = groupContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(painterResource(R.drawable.ic_group), contentDescription = null, tint = colors.onSurfaceVariant)
+                        Spacer(Modifier.size(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Group call (SFU)", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "More than 2 people through your own SFU server",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.size(12.dp))
+                        Switch(checked = group, onCheckedChange = { group = it })
+                    }
+                }
+
                 Spacer(Modifier.height(20.dp))
 
                 val height = ButtonDefaults.MediumContainerHeight
@@ -195,7 +232,7 @@ fun LobbyScreen(
                     contentPadding = ButtonDefaults.contentPaddingFor(height, hasEndIcon = true),
                     modifier = Modifier.fillMaxWidth().height(height)
                 ) {
-                    Text("Join room", style = ButtonDefaults.textStyleFor(height))
+                    Text(if (group) "Join group call" else "Join room", style = ButtonDefaults.textStyleFor(height))
                     Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(height)))
                     Icon(
                         painterResource(R.drawable.ic_arrow_forward),
@@ -218,19 +255,37 @@ fun LobbyScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Signaling server · $serverAddress",
+                if (group) "SFU server · ${sfu.address}" else "Signaling server · $serverAddress",
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
             Spacer(Modifier.size(6.dp))
-            Icon(painterResource(R.drawable.ic_edit), contentDescription = "Change signaling server", Modifier.size(14.dp))
+            Icon(
+                painterResource(R.drawable.ic_edit),
+                contentDescription = if (group) "Change SFU server" else "Change signaling server",
+                Modifier.size(14.dp)
+            )
         }
     }
     }
 
-    if (editingServer) {
+    if (editingServer && group) {
+        ServerAddressDialog(
+            current = sfu.address,
+            default = sfu.defaultAddress,
+            onDismiss = { editingServer = false },
+            onSave = { address ->
+                sfu.onChange(address)
+                editingServer = false
+            },
+            title = "SFU server",
+            description = "The address printed when you start sfu-server (port ${SfuServer.DEFAULT_PORT}). It is saved on this device.",
+            example = "ws://192.168.1.10:${SfuServer.DEFAULT_PORT}",
+            normalize = SfuServer::normalize
+        )
+    } else if (editingServer) {
         ServerAddressDialog(
             current = serverAddress,
             default = defaultServerAddress,
@@ -268,25 +323,34 @@ fun LobbyScreen(
     }
 }
 
-/** Edits the signaling server address; [onSave] gets it normalized to "scheme://host[:port]". */
+/** Edits a server address; [onSave] gets it normalized to "scheme://host[:port]" by [normalize]. */
 @Composable
-private fun ServerAddressDialog(current: String, default: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+private fun ServerAddressDialog(
+    current: String,
+    default: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    title: String = "Signaling server",
+    description: String = "The address printed when you start the signaling server. It is saved on this device.",
+    example: String = "http://192.168.1.10:4000",
+    normalize: (String) -> String? = SignalingServer::normalize
+) {
     var text by rememberSaveable { mutableStateOf(current) }
     var invalid by rememberSaveable { mutableStateOf(false) }
 
     fun save() {
-        val address = SignalingServer.normalize(text)
+        val address = normalize(text)
         if (address == null) invalid = true else onSave(address)
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(painterResource(R.drawable.ic_edit), contentDescription = null) },
-        title = { Text("Signaling server") },
+        title = { Text(title) },
         text = {
             Column {
                 Text(
-                    "The address printed when you start the signaling server. It is saved on this device.",
+                    description,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(16.dp))
@@ -297,10 +361,10 @@ private fun ServerAddressDialog(current: String, default: String, onDismiss: () 
                         invalid = false
                     },
                     label = { Text("Address") },
-                    placeholder = { Text("http://192.168.1.10:4000") },
+                    placeholder = { Text(example) },
                     isError = invalid,
                     supportingText = if (invalid) {
-                        { Text("Use an address like http://192.168.1.10:4000") }
+                        { Text("Use an address like $example") }
                     } else null,
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
@@ -409,15 +473,17 @@ private fun Backdrop() {
 
 @Preview(name = "Lobby", device = "spec:width=411dp,height=891dp")
 @Composable
-fun LobbyPreview() = AppTheme(darkTheme = false) { LobbyScreen("http://192.168.0.4:4000", "http://192.168.0.4:4000", {}) { _, _ -> } }
+fun LobbyPreview() = AppTheme(darkTheme = false) { LobbyScreen("http://192.168.0.4:4000", "http://192.168.0.4:4000", {}, PreviewSfu) { _, _, _ -> } }
 
 @Preview(name = "Lobby dark", device = "spec:width=411dp,height=891dp")
 @Composable
-fun LobbyDarkPreview() = AppTheme(darkTheme = true) { LobbyScreen("http://192.168.0.4:4000", "http://192.168.0.4:4000", {}) { _, _ -> } }
+fun LobbyDarkPreview() = AppTheme(darkTheme = true) { LobbyScreen("http://192.168.0.4:4000", "http://192.168.0.4:4000", {}, PreviewSfu) { _, _, _ -> } }
 
 @Preview(name = "Lobby landscape", device = "spec:width=891dp,height=411dp,orientation=landscape")
 @Composable
-fun LobbyLandscapePreview() = AppTheme(darkTheme = false) { LobbyScreen("http://192.168.0.4:4000", "http://192.168.0.4:4000", {}) { _, _ -> } }
+fun LobbyLandscapePreview() = AppTheme(darkTheme = false) { LobbyScreen("http://192.168.0.4:4000", "http://192.168.0.4:4000", {}, PreviewSfu) { _, _, _ -> } }
+
+private val PreviewSfu = ServerSettings("ws://192.168.0.4:4001", "ws://192.168.0.4:4001") {}
 
 @Preview(name = "Signaling server dialog")
 @Composable

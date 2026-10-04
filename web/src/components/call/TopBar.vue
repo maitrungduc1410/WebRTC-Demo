@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Lock, MicOff, MonitorUp, PictureInPicture2, SwitchCamera, VolumeOff } from '@lucide/vue'
+import { Lock, MicOff, MonitorUp, PictureInPicture2, SwitchCamera, Users, VolumeOff } from '@lucide/vue'
 import type { MediaState, Phase } from '@/call/useCall'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Kbd } from '@/components/ui/kbd'
@@ -17,11 +17,14 @@ const props = defineProps<{
   showPip: boolean
   pipActive: boolean
   showSwitchCamera: boolean
+  /** Group call: everyone in the room, you included. */
+  peopleCount?: number
 }>()
 
 const emit = defineEmits<{
   togglePip: []
   switchCamera: []
+  openPeople: []
 }>()
 
 const coarse = useCoarsePointer()
@@ -36,6 +39,7 @@ const status = computed(() => ({
 const chips = computed(() => {
   if (props.phase !== 'connected') return []
   const list = []
+  if (props.peopleCount) list.push({ id: 'people', icon: Users, text: `${props.peopleCount} in call` })
   if (!props.remoteMedia.audio) list.push({ id: 'muted', icon: MicOff, text: 'Muted' })
   if (props.remoteAudioMuted) list.push({ id: 'silenced', icon: VolumeOff, text: 'Muted by you' })
   if (props.remoteMedia.screen) list.push({ id: 'presenting', icon: MonitorUp, text: 'Presenting' })
@@ -78,14 +82,20 @@ const circle = 'glass inline-flex size-11 items-center justify-center rounded-fu
         leave-to-class="scale-50 opacity-0"
         move-class="transition-transform duration-400 ease-spring"
       >
-        <span
+        <component
+          :is="chip.id === 'people' ? 'button' : 'span'"
           v-for="chip in chips"
           :key="chip.id"
-          class="glass inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-white"
+          :class="cn(
+            'glass inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-white',
+            chip.id === 'people' && 'cursor-pointer transition-[scale,background-color] duration-300 ease-bounce hover:scale-105 hover:bg-white/15 active:scale-95',
+          )"
+          v-bind="chip.id === 'people' ? { type: 'button', 'aria-label': `${chip.text}, show everyone` } : {}"
+          @click="chip.id === 'people' && emit('openPeople')"
         >
           <component :is="chip.icon" class="size-3.5" />
           {{ chip.text }}
-        </span>
+        </component>
       </TransitionGroup>
     </div>
 

@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// In-call chat over the WebRTC data channel.
+/// In-call chat: over the WebRTC data channel in a 1:1 call, over the SFU WebSocket in a group call.
 struct ChatView: View {
     let model: CallViewModel
 
@@ -21,7 +21,9 @@ struct ChatView: View {
                         ContentUnavailableView(
                             "No messages yet",
                             systemImage: "bubble.left.and.bubble.right",
-                            description: Text("Messages go straight to the other device over the data channel.")
+                            description: Text(model.isGroup
+                                ? "Messages go to everyone in the room through the SFU server."
+                                : "Messages go straight to the other device over the data channel.")
                         )
                         .padding(.top, 24)
                     }
@@ -116,14 +118,22 @@ struct MessageBubble: View {
     var body: some View {
         HStack {
             if message.isLocal { Spacer(minLength: 48) }
-            Text(message.text)
-                .foregroundStyle(message.isLocal ? Color.white : Color.primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-            .background(
-                message.isLocal ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.fill.secondary),
-                in: .rect(cornerRadius: 20, style: .continuous)
-            )
+            VStack(alignment: .leading, spacing: 4) {
+                if let sender = message.sender, !message.isLocal {
+                    Text(sender)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                }
+                Text(message.text)
+                    .foregroundStyle(message.isLocal ? Color.white : Color.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                .background(
+                    message.isLocal ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.fill.secondary),
+                    in: .rect(cornerRadius: 20, style: .continuous)
+                )
+            }
             if !message.isLocal { Spacer(minLength: 48) }
         }
     }

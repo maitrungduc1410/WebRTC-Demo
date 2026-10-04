@@ -44,6 +44,12 @@
 		2BC0A10B2F30B00200E2EE01 /* EffectsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A10B2F30B00100E2EE01 /* EffectsCatalog.swift */; };
 		2BC0A10C2F30B00200E2EE01 /* EffectsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A10C2F30B00100E2EE01 /* EffectsSheet.swift */; };
 		2BC0A10D2F30B00200E2EE01 /* effects in Resources */ = {isa = PBXBuildFile; fileRef = 2BC0A10D2F30B00100E2EE01 /* effects */; };
+		2BC0A1102F30B00200E2EE01 /* LocalMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1102F30B00100E2EE01 /* LocalMedia.swift */; };
+		2BC0A1112F30B00200E2EE01 /* FrameEncryption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1112F30B00100E2EE01 /* FrameEncryption.swift */; };
+		2BC0A1122F30B00200E2EE01 /* GroupCallClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1122F30B00100E2EE01 /* GroupCallClient.swift */; };
+		2BC0A1132F30B00200E2EE01 /* GroupCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1132F30B00100E2EE01 /* GroupCallView.swift */; };
+		2BC0A1142F30B00200E2EE01 /* SFUServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1142F30B00100E2EE01 /* SFUServer.swift */; };
+		2BC0A1152F30B00200E2EE01 /* SignalingSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC0A1152F30B00100E2EE01 /* SignalingSocket.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -129,6 +135,12 @@
 		2BC0A10B2F30B00100E2EE01 /* EffectsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsCatalog.swift; sourceTree = "<group>"; };
 		2BC0A10C2F30B00100E2EE01 /* EffectsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsSheet.swift; sourceTree = "<group>"; };
 		2BC0A10D2F30B00100E2EE01 /* effects */ = {isa = PBXFileReference; lastKnownFileType = folder; name = effects; path = ../effects; sourceTree = "<group>"; };
+		2BC0A1102F30B00100E2EE01 /* LocalMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMedia.swift; sourceTree = "<group>"; };
+		2BC0A1112F30B00100E2EE01 /* FrameEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameEncryption.swift; sourceTree = "<group>"; };
+		2BC0A1122F30B00100E2EE01 /* GroupCallClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCallClient.swift; sourceTree = "<group>"; };
+		2BC0A1132F30B00100E2EE01 /* GroupCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCallView.swift; sourceTree = "<group>"; };
+		2BC0A1142F30B00100E2EE01 /* SFUServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFUServer.swift; sourceTree = "<group>"; };
+		2BC0A1152F30B00100E2EE01 /* SignalingSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalingSocket.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -203,6 +215,12 @@
 				2BC0A10B2F30B00100E2EE01 /* EffectsCatalog.swift */,
 				2BC0A10C2F30B00100E2EE01 /* EffectsSheet.swift */,
 				2B0F7E1F2C9B1FF200EC81C9 /* PeerConnectionClient.swift */,
+				2BC0A1102F30B00100E2EE01 /* LocalMedia.swift */,
+				2BC0A1112F30B00100E2EE01 /* FrameEncryption.swift */,
+				2BC0A1122F30B00100E2EE01 /* GroupCallClient.swift */,
+				2BC0A1132F30B00100E2EE01 /* GroupCallView.swift */,
+				2BC0A1142F30B00100E2EE01 /* SFUServer.swift */,
+				2BC0A1152F30B00100E2EE01 /* SignalingSocket.swift */,
 				2BBD7BE52C986938003B4801 /* RTCCustomFrameCapturer.swift */,
 				2BD4B3CA2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift */,
 				2BA1E0012F20A00100E2EE01 /* EffectsProcessor.swift */,
@@ -484,6 +502,12 @@
 				2BBD7BE62C986938003B4801 /* RTCCustomFrameCapturer.swift in Sources */,
 				2BD4B3CB2F149B480092E3C4 /* RTCFileVideoCapturer+URL.swift in Sources */,
 				2BA1E0022F20A00100E2EE01 /* EffectsProcessor.swift in Sources */,
+				2BC0A1102F30B00200E2EE01 /* LocalMedia.swift in Sources */,
+				2BC0A1112F30B00200E2EE01 /* FrameEncryption.swift in Sources */,
+				2BC0A1122F30B00200E2EE01 /* GroupCallClient.swift in Sources */,
+				2BC0A1132F30B00200E2EE01 /* GroupCallView.swift in Sources */,
+				2BC0A1142F30B00200E2EE01 /* SFUServer.swift in Sources */,
+				2BC0A1152F30B00200E2EE01 /* SignalingSocket.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -9,12 +9,12 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.example.myapplication.webrtc.PeerConnectionClient
+import com.example.myapplication.webrtc.LocalMedia
 import java.lang.ref.WeakReference
 
 /**
  * Foreground service required by Android 10+ while a MediaProjection is active. The capturer can only
- * be created after startForeground, so the service starts it on the call's client.
+ * be created after startForeground, so the service starts it on the call's local media.
  */
 class ScreenCaptureService : Service() {
     
@@ -24,14 +24,14 @@ class ScreenCaptureService : Service() {
         // Set by the call screen right before starting the service.
         var mediaProjectionPermissionResultData: Intent? = null
 
-        // WeakReference so the service never outlives the call's client.
-        var peerConnectionClientRef: WeakReference<PeerConnectionClient>? = null
+        // WeakReference so the service never outlives the call's media.
+        var localMediaRef: WeakReference<LocalMedia>? = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(1, createNotification())
 
-        peerConnectionClientRef?.get()?.createDeviceCapture(true, mediaProjectionPermissionResultData)
+        localMediaRef?.get()?.createDeviceCapture(true, mediaProjectionPermissionResultData)
 
         return START_NOT_STICKY
     }
@@ -57,7 +57,7 @@ class ScreenCaptureService : Service() {
     // so it is the one that hears about rotations.
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        peerConnectionClientRef?.get()?.onDisplayChanged()
+        localMediaRef?.get()?.onDisplayChanged()
     }
 
     override fun onBind(intent: Intent?): IBinder? {

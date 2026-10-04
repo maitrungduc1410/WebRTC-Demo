@@ -23,9 +23,12 @@ object SignalingServer {
         }
     }
 
+    /** The signaling WebSocket endpoint of a normalized address: "http://host:4000" -> "ws://host:4000/ws". */
+    fun webSocketUrl(address: String): String = address.replaceFirst("http", "ws") + "/ws"
+
     /**
      * Accepts "192.168.1.10:4000" as well as a full URL and returns "scheme://host[:port]", or null
-     * when it is not an http(s) address. A path is dropped because Socket.IO would take it for a namespace.
+     * when it is not an http(s) address. A path is dropped: the server takes its WebSocket on /ws.
      */
     fun normalize(input: String): String? {
         val text = input.trim()

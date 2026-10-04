@@ -14,7 +14,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,12 +22,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.example.myapplication.call.BaseCallViewModel
 import com.example.myapplication.call.ConnectionPhase
 import com.example.myapplication.call.CallViewModel
+import com.example.myapplication.call.GroupCallViewModel
 import com.example.myapplication.ui.call.CallScreen
+import com.example.myapplication.ui.call.GroupCallScreen
 import com.example.myapplication.ui.theme.AppTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -45,7 +50,12 @@ class CallActivity : ComponentActivity() {
         private val DefaultPipRatio = Rational(9, 16)
     }
 
-    private val viewModel: CallViewModel by viewModels()
+    private val group by lazy { intent.getBooleanExtra(BaseCallViewModel.EXTRA_GROUP, false) }
+
+    private val viewModel: BaseCallViewModel by lazy {
+        val provider = ViewModelProvider(this)
+        if (group) provider[GroupCallViewModel::class.java] else provider[CallViewModel::class.java]
+    }
 
     private var inPip by mutableStateOf(false)
     private var remoteFrameSize = IntSize.Zero
@@ -102,20 +112,41 @@ class CallActivity : ComponentActivity() {
                     if (hasPermissions()) viewModel.startMedia() else permissionLauncher.launch(RequiredPermissions)
                 }
 
-                CallScreen(
-                    vm = viewModel,
-                    inPip = inPip,
-                    onHangUp = { finish() },
-                    onShareScreen = {
-                        val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        screenCaptureLauncher.launch(manager.createScreenCaptureIntent())
-                    },
-                    onShareFromGallery = { galleryLauncher.launch("video/*") },
-                    onShareFromFiles = { fileLauncher.launch(arrayOf("video/*", "video/mp4", "video/webm")) },
-                    onEnterPip = if (pipSupported) ::enterPip else null,
-                    onRemoteFrameSize = ::onRemoteFrameSize
-                )
+                val onShareScreen = {
+                    val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    screenCaptureLauncher.launch(manager.createScreenCaptureIntent())
+                }
+                val onShareFromGallery = { galleryLauncher.launch("video/*") }
+                val onShareFromFiles = { fileLauncher.launch(arrayOf("video/*", "video/mp4", "video/webm")) }
+                when (val vm = viewModel) {
+                    is GroupCallViewModel -> GroupCallScreen(
+                        vm = vm,
+                        inPip = inPip,
+                        onHangUp = { finish() },
+                        onShareScreen = onShareScreen,
+                        onShareFromGallery = onShareFromGallery,
+                        onShareFromFiles = onShareFromFiles,
+                        onEnterPip = if (pipSupported) ::enterPip else null
+                    )
+                    is CallViewModel -> CallScreen(
+                        vm = vm,
+                        inPip = inPip,
+                        onHangUp = { finish() },
+                        onShareScreen = onShareScreen,
+                        onShareFromGallery = onShareFromGallery,
+                        onShareFromFiles = onShareFromFiles,
+                        onEnterPip = if (pipSupported) ::enterPip else null,
+                        onRemoteFrameSize = ::onRemoteFrameSize
+                    )
+                }
             }
+        }
+
+        // There is no reconnect: a closed signaling socket (or a full room) ends either kind of call.
+        lifecycleScope.launch {
+            val message = viewModel.callEnded.filterNotNull().first()
+            Toast.makeText(this@CallActivity, message, Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 

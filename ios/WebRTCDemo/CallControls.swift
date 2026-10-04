@@ -201,25 +201,28 @@ struct MoreSheet: View {
                     .disabled(!model.effectsAvailable || model.sharing != .none)
                     OptionTile(
                         systemImage: model.remoteAudioMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                        title: "Peer audio",
+                        title: model.isGroup ? "Everyone's audio" : "Peer audio",
                         detail: model.remoteAudioMuted ? "Muted for you" : "Playing",
                         active: model.remoteAudioMuted,
                         action: model.toggleRemoteAudio
                     )
                     OptionTile(
                         systemImage: model.remoteVideoHidden ? "eye.slash.fill" : "eye.fill",
-                        title: "Peer video",
+                        title: model.isGroup ? "Everyone's video" : "Peer video",
                         detail: model.remoteVideoHidden ? "Hidden for you" : "Showing",
                         active: model.remoteVideoHidden,
                         action: model.toggleRemoteVideo
                     )
-                    OptionTile(
-                        systemImage: remoteFit ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                        title: remoteFit ? "Fit to screen" : "Fill screen",
-                        detail: "Double-tap the video",
-                        active: remoteFit,
-                        action: onToggleFit
-                    )
+                    // Group tiles pick fit or fill per participant
+                    if !model.isGroup {
+                        OptionTile(
+                            systemImage: remoteFit ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                            title: remoteFit ? "Fit to screen" : "Fill screen",
+                            detail: "Double-tap the video",
+                            active: remoteFit,
+                            action: onToggleFit
+                        )
+                    }
                     OptionTile(
                         systemImage: "arrow.triangle.2.circlepath.camera.fill",
                         title: "Switch camera",
@@ -231,7 +234,9 @@ struct MoreSheet: View {
                 }
 
                 Label(
-                    "Muting or hiding the peer only affects this device.",
+                    model.isGroup
+                        ? "Muting or hiding others only affects this device."
+                        : "Muting or hiding the peer only affects this device.",
                     systemImage: "info.circle"
                 )
                 .font(.footnote)

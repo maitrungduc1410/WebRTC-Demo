@@ -40,25 +40,18 @@ _Recording: `images/demo-ui.gif`, joining a room, dragging the picture-in-pictur
 
 # Features
 
-| Feature                                   | Web | iOS | Android |
-|-------------------------------------------|-----|-----|---------|
-| Video call                                | ✅   | ✅   | ✅       |
-| Front/back camera                         | ✅   | ✅   | ✅       |
-| Mute local video / audio                  | ✅   | ✅   | ✅       |
-| Peer sees when your camera or mic is off  | ✅   | ✅   | ✅       |
-| Mute remote audio (this device only)      | ✅   | ✅   | ✅       |
-| Hide remote video (this device only)      | ✅   | ✅   | ✅       |
-| Device speaker                            | ❌   | ✅   | ✅       |
-| Data channel chat                         | ✅   | ✅   | ✅       |
-| Share screen                              | ✅   | ✅   | ✅       |
-| Share video from Photos/Files             | ✅   | ✅   | ✅       |
-| Background blur, pictures and videos      | ✅   | ✅   | ✅       |
-| Face-tracked stickers                     | ✅   | ✅   | ✅       |
-| End to end encryption                     | ✅   | ✅   | ✅       |
-| Draggable picture-in-picture self view    | ✅   | ✅   | ✅       |
-| System picture-in-picture (call in a floating window) | ✅   | ✅   | ✅       |
-| Fit / fill remote video                   | ✅   | ✅   | ✅       |
-| Phone rotation (landscape lobby and call) | ✅   | ✅   | ✅       |
+| Feature                                                    | Web | iOS | Android |
+|------------------------------------------------------------|-----|-----|---------|
+| 1:1 video call, peer to peer                               | ✅   | ✅   | ✅       |
+| Group call through your own SFU (optional)                 | ✅   | ✅   | ✅       |
+| Chat over a data channel                                   | ✅   | ✅   | ✅       |
+| Share your screen or a video file                          | ✅   | ✅   | ✅       |
+| Virtual backgrounds: blur, pictures and videos             | ✅   | ✅   | ✅       |
+| Face-tracked stickers                                      | ✅   | ✅   | ✅       |
+| End-to-end encryption, 1:1 and group                       | ✅   | ✅   | ✅       |
+| Picture-in-picture (the call in a floating window)         | ✅   | ✅¹  | ✅       |
+
+¹ On iOS, picture-in-picture is available in 1:1 calls only.
 
 Native clients use [webrtc-sdk](https://github.com/webrtc-sdk) `150.7871.01` (Android `io.github.webrtc-sdk:android`, iOS pod `WebRTC-SDK`).
 
@@ -68,7 +61,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the thre
 
 | Part             | Stack |
 |------------------|-------|
-| Signaling server | Node.js, Express, Socket.IO |
+| Signaling server | Node.js, WebSocket (`ws`) |
+| SFU server (optional) | Go, [Pion](https://github.com/pion/webrtc), WebSocket |
 | Web              | Vue 3, Vite, Tailwind CSS, shadcn-vue, Lucide, Motion, MediaPipe |
 | Android          | Kotlin, Jetpack Compose, Material 3 Expressive, MediaPipe |
 | iOS              | Swift, SwiftUI, Liquid Glass, Vision, Core Image |
@@ -91,6 +85,10 @@ npm install # or yarn install (to install dependencies)
 npm run dev # or yarn dev
 ```
 Once started the address of the signaling server will be printed in your terminal. Something like `192.168.1.1:4000`
+
+The server is a plain WebSocket relay on `ws://<address>/ws` (JSON messages, see [ARCHITECTURE.md](ARCHITECTURE.md#3-signaling-server)). Set `PORT` to use another port.
+
+> **No reconnect.** Clients keep the signaling socket open for the whole call. If it drops (server stopped, network switch, phone offline for a while), the call ends with "Lost the connection to the signaling server", even if audio and video were still flowing. Just join the room again. Group calls behave the same way with the SFU server.
 
 ## Start clients
 The usage of all clients are same, you just need to join clients in same room by input same roomID.
@@ -119,6 +117,21 @@ pod install
 
 Then open `WebRTCDemo.xcworkspace` and run on a device (the camera and screen sharing need real hardware). In the lobby, tap the signaling server address at the bottom and enter the address printed when you start the signaling server. The app remembers it. The default is `SignalingServer.defaultURL` in `WebRTCDemo/SignalingServer.swift`.
 
+## Group calls (optional)
+
+Everything above is enough for 1:1 calls. To call with more people, also start the SFU server. It needs [Go](https://go.dev/dl/) 1.24 or newer (an older Go downloads 1.24 by itself):
+
+```
+cd sfu-server
+go run .
+```
+
+It prints addresses like `ws://192.168.1.1:4001/ws`. It handles both signaling and media for group calls, so the Node signaling server is not needed for them. Clients must reach **TCP and UDP port 4001** on that machine. On a cloud VM behind NAT, start it with `go run . -public-ip <public IP>`. Options, firewall and cloud setup, and troubleshooting are in [`sfu-server/README.md`](sfu-server/README.md).
+
+A room holds 8 people by default; change it with `-max-participants` (or `MAX_PARTICIPANTS`), e.g. `go run . -max-participants 12`. It is not a hard limit of the design, but every client receives and decodes everyone else's video at full quality (there is no simulcast), so phones and bandwidth give out as rooms grow. See [More than 2 peers in a room](#more-than-2-peers-in-a-room).
+
+In the lobby of any client, switch to **Group call (SFU)**, set the SFU server address once (it is saved, like the signaling address), and join the same room id from every device. E2EE works in group calls too; everyone in the room must use the same E2EE setting.
+
 # Using the call screen
 
 The Android and iOS call screens work the same way:
@@ -138,22 +151,42 @@ The web call screen follows the same layout in desktop and phone browsers, with 
 - On screens 1024 px and wider, chat opens as a side panel; on smaller screens it opens as a bottom sheet. On phones, "More" opens a sheet with the remaining options.
 - The picture-in-picture button opens the call in a floating window that stays on top of other tabs and apps. In Chrome and Edge it is a full mini call window (remote video, your video, mic, camera and hang-up buttons), and since Chrome 134 it opens by itself when you switch to another tab during a call. Other browsers float the remote video only.
 
+## Group call screen
+
+In a group call every client shows the other participants in a grid, with the same controls as a 1:1 call:
+
+- Each tile is labelled with the participant's platform and a short id (for example `Android · 3f2a1c`), shows a mic-off icon when their microphone is off, and the avatar placeholder when their camera is off.
+- A green ring marks who is speaking, from the received audio level.
+- Tap the people count next to the timer to see everyone in the room, with your own label first and highlighted, so you can find your tile on the other devices. On web it opens a dialog, and your label is also shown next to "You" on your own tile.
+- People who share their screen are shown fit (whole frame); everyone else fills the tile. Double-tap a tile to switch.
+- Your own video stays the draggable picture-in-picture tile. While you are alone, the room id card is shown.
+- Chat goes through the SFU server and shows who sent each message. In More, muting peer audio or hiding peer video applies to everyone.
+- On web and iOS, group tiles show the avatar without the blurred last frame (Android keeps it). On iOS, the system picture-in-picture window is only available in 1:1 calls.
+
 # Troubleshooting
 
-## iOS - Compiling for iOS 11.0, but module...
+## iOS - The iOS deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 13.0, but the range of supported deployment target versions is 15.0 to 27.0.x
 
-Change Minimum Deployments of the pod that has issue to latest
+The `WebRTC-SDK` pod declares an older deployment target than recent Xcode versions support. In Xcode, open the **Pods** project, select the **WebRTC-SDK** target, and set **Build Settings > Deployment > iOS Deployment Target** to iOS 17 or newer. Running `pod install` again resets it.
 
-<img src="images/ios_issue_1.jpeg" width="300" />
+<img src="images/ios_issue_deployment_target.png" width="500" />
 
-## iOS - Sandbox: rsync.samba(13105)...
+## iOS - No audio in calls, video works
 
-<img src="images/ios_issue_2.png" width="300" />
+Symptoms: in 1:1 and group calls the others never hear the iPhone and the iPhone plays nothing (no green speaking border on it either), while video works both ways. The SFU log shows `publishes video` but no `publishes audio` for the iPhone, and the Xcode console shows:
 
+```
+Failed to set category and mode: The operation couldn’t be completed. (OSStatus error -50.)
+Failed to configure audio session.
+InitRecording: InitPlayOrRecord failed for InitRecording!
+```
 
-Solution: Update your Xcode project build option ENABLE_USER_SCRIPT_SANDBOXING to 'No'.
+The cause is the `WebRTC-SDK` pod, which is the [webrtc-sdk](https://github.com/webrtc-sdk/webrtc) fork, not upstream WebRTC. When the audio device starts, WebRTC applies `RTCAudioSessionConfiguration.webRTC()` to the audio session:
 
-<img src="images/ios_issue_2_solution.png" width="300" />
+- Upstream WebRTC defaults it to category `playAndRecord`, mode `voiceChat`.
+- The fork copies the session's *current* category and mode instead (at least since M125). At launch that is `soloAmbient` / `default`, a playback-only category, so the microphone never opens. Since M150 the fork also adds the `allowBluetoothHFP` option, which is only valid with recording categories, so iOS rejects the whole configuration with `-50`, the session stays `soloAmbient`, and WebRTC tears the audio unit down: no recording and no playout.
+
+The fork expects the app to configure the session itself, so `CallViewModel.configureCallAudio()` sets the WebRTC configuration to `playAndRecord` + `voiceChat` + `allowBluetoothHFP` before every call. Keep it when upgrading the pod. If the configuration is ever rejected again, the call shows the toast "Call audio didn't start: iOS refused the audio settings".
 
 ## Android - Compose or Material 3 dependency needs a newer compileSdk or AGP
 
@@ -179,7 +212,7 @@ Web, Android and iOS can talk to each other with E2EE on. Android/iOS use the `F
 
 - The unencrypted header is the VP8 payload header (10 bytes for key frames, 3 for delta frames), the Opus TOC byte (1 byte), or H264 data up to the first slice NAL header + 1 byte. It is authenticated as AES-GCM additional data. For H264 the rest of the frame is RBSP-escaped.
 - The AES key is derived with `PBKDF2-HMAC-SHA256(material, "LKFrameEncryptionKey", 100000)`, 128 bits. Key provider options are the same on every platform: shared key, key index 0, no ratchet, no magic bytes.
-- The peer already in the room generates 32 random bytes of key material and sends them with `send encryption key` before the offer. When E2EE is on, every platform prefers VP8.
+- The peer already in the room generates 32 random bytes of key material and sends them with the `encryption key` message (base64) before the offer. When E2EE is on, every platform prefers VP8.
 - Both peers must enable E2EE. The key goes through the signaling server in plain form, which is fine for a demo; a real app should use a key agreement (e.g. ECDH) or a passphrase shared out of band.
 
 ## Screen sharing on iOS
@@ -194,7 +227,15 @@ Learn from [Flutter WebRTC Demo](https://github.com/flutter-webrtc/flutter-webrt
 
 ## More than 2 peers in a room
 
-For demo purpose, we only support 1:1 call now, but you can extend it to support more peers by implementing a mesh network or using SFU like [mediasoup](https://mediasoup.org/) or [Janus](https://janus.conf.meetecho.com/).
+The default call is 1:1 and peer to peer. Group calls go through `sfu-server`, a small Selective Forwarding Unit written for this demo with [Pion](https://github.com/pion/webrtc), instead of a ready-made media server. That keeps every client on standard WebRTC APIs, with no SFU SDK, so you can read how a group call works end to end:
+
+- **Why not mesh?** With N people, mesh makes every phone encode and upload N − 1 streams. Through an SFU each client uploads one stream and the server copies its packets to the others.
+- **Two PeerConnections per client.** The client always offers on the *publish* connection, which is never renegotiated. The server always offers on the *subscribe* connection, and renegotiates it when people join or leave. Nobody switches between offering and answering, and the outgoing camera is never touched by a renegotiation.
+- **Whose track is this?** The server sets each forwarded track's stream id to the publisher's participant id, so `ontrack` tells the client which tile it belongs to.
+- **E2EE still works.** Frames are encrypted before packetization, so the server forwards ciphertext. The room creator's key material is the room key.
+- **What a production SFU adds.** Simulcast and per-subscriber layer selection, TURN, several servers, authentication, key rotation. If you need those, look at [LiveKit](https://github.com/livekit/livekit), [mediasoup](https://mediasoup.org/) or [Janus](https://janus.conf.meetecho.com/).
+
+Details, diagrams and the signaling protocol are in [ARCHITECTURE.md, section 12](ARCHITECTURE.md#12-group-call-sfu-optional).
 
 ## Backgrounds and effects
 
@@ -222,5 +263,5 @@ Stickers are listed in `effects/stickers.json`. Sizes and offsets are measured i
 ### Credits
 
 - Stickers are based on [Noto Emoji](https://github.com/googlefonts/noto-emoji) (Apache License 2.0, see [`effects/stickers/LICENSE`](effects/stickers/LICENSE)). The headphones were reshaped and recoloured.
-- Background pictures and videos come from [Pexels](https://www.pexels.com) under the [Pexels license](https://www.pexels.com/license/).
+- Background pictures and videos come from [Pexels](https://www.pexels.com) and [Pixabay](https://pixabay.com/), under the [Pexels license](https://www.pexels.com/license/) and the [Pixabay Content License](https://pixabay.com/service/license-summary/).
 - The MediaPipe models (`selfie_segmenter`, `face_landmarker`) are bundled with the Android app and loaded from MediaPipe's model storage on the web; see their model cards for terms.

@@ -1,175 +1,146 @@
-const express = require("express");
-const app = express();
-const port = 4000;
-const ip = require("ip");
-
 const http = require("http");
-const server = http.createServer(app);
+const os = require("os");
+const { WebSocketServer, WebSocket } = require("ws");
 
-const io = require("socket.io")(server, {
-  cors: {
-    origin: "*",
-  },
-});
-const ipAddress = ip.address();
+const port = Number(process.env.PORT) || 4000;
+const HEARTBEAT_MS = 25_000;
 
 /*
-  Eg: rooms = [
-    {
-      id: 123456,
-      participants: ['socket_id_1', 'socket_id_2']
-    }
-  ]
+  Signaling for 1:1 calls: JSON text frames over a WebSocket on /ws, each with a "type".
+  The server only pairs two sockets per room and relays their messages; see ARCHITECTURE.md.
 
-  A room can only have maximum 2 participants
+  rooms: roomId -> Set of sockets (at most 2)
 */
-let rooms = [];
+const rooms = new Map();
 
-app.get("/", (req, res) => {
-  return res.json({
-    message: "Hello world1",
-  });
+/** Relayed as is to the other participant in the room. */
+const RELAYED = new Set([
+  "offer",
+  "answer",
+  "candidate",
+  "encryption key",
+  "encryption key received",
+  "media state",
+]);
+
+// GET / lets the web lobby check that the server is up.
+const server = http.createServer((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (req.method === "GET" && req.url === "/") {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ name: "signaling-server", ok: true }));
+    return;
+  }
+  res.statusCode = 404;
+  res.end();
 });
 
-io.on("error", (e) => console.log(e));
-io.on("connection", (socket) => {
+const wss = new WebSocketServer({ server, path: "/ws" });
+
+wss.on("connection", (socket) => {
   console.log("A client connected");
-  socket.on("join room", (data) => {
-    const roomId = data.roomId.toString();
-    console.log("join room:", roomId);
-    const index = rooms.findIndex((room) => room.id === roomId);
-    console.log(index);
-    if (index > -1) {
-      if (rooms[index].participants.length <= 1) {
-        if (rooms[index].participants[0] === socket.id) {
-          socket.emit("message", { message: "User is already in this room" });
-          return;
-        }
+  socket.roomId = null;
+  socket.alive = true;
+  socket.on("pong", () => {
+    socket.alive = true;
+  });
 
-        socket.join(roomId);
-        rooms[index].participants.push(socket.id);
+  socket.on("message", (data) => {
+    let message;
+    try {
+      message = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+    if (!message || typeof message.type !== "string") return;
 
-        socket.broadcast.to(roomId).emit("new user joined");
-      } else {
-        socket.emit("message", { message: "Room is full" });
-      }
-    } else {
-      socket.join(roomId);
-      rooms.push({
-        id: roomId,
-        participants: [socket.id],
-      });
+    if (message.type === "join") {
+      join(socket, message.roomId);
+    } else if (message.type === "leave") {
+      leave(socket);
+    } else if (RELAYED.has(message.type)) {
+      relay(socket, message);
     }
   });
 
-  socket.on("offer", (data) => {
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.broadcast.to(data.roomId).emit("offer", { offer: data.offer });
-    } else {
-      socket.emit("message", { message: "Room not found" });
-    }
-  });
-
-  socket.on("answer", (data) => {
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.broadcast.to(data.roomId).emit("answer", { answer: data.answer });
-    } else {
-      socket.emit("message", { message: "Room not found" });
-    }
-  });
-
-  socket.on("new ice candidate", (data) => {
-    console.log("new ice candidate", data);
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.broadcast
-        .to(data.roomId)
-        .emit("new ice candidate", { iceCandidate: data.iceCandidate });
-    } else {
-      socket.emit("message", { message: "Room not found" });
-    }
-  });
-
-  socket.on("leave room", (data) => {
-    // use only for web client
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.leave(data.roomId);
-      removeUserFromRoom(socket.id);
-    } else {
-      socket.emit("message", { message: "Room not found" });
-    }
-  });
-
-  socket.on("send encryption key", (data) => {
-    console.log("send encryption key", data);
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.broadcast
-        .to(data.roomId)
-        .emit("receive encryption key", { encryptionKey: data.encryptionKey });
-    } else {
-      console.log("Room not found");
-      // socket.emit("message", { message: "Room not found" });
-    }
-  });
-
-  socket.on("encryption key received", (data) => {
-    console.log("encryption key received", data);
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.broadcast
-        .to(data.roomId)
-        .emit("remote peer received encryption key");
-    }
-  });
-
-  // { audio, video, screen }: lets the other peer show a placeholder instead of black frames
-  socket.on("media state", (data) => {
-    data.roomId = data.roomId.toString();
-    const index = rooms.findIndex((room) => room.id === data.roomId);
-
-    if (index > -1) {
-      socket.broadcast.to(data.roomId).emit("media state", { state: data.state });
-    }
-  });
-
-  socket.on("disconnect", () => {
-    console.log("a client disconnected");
-    removeUserFromRoom(socket.id);
+  socket.on("close", () => {
+    console.log("A client disconnected");
+    leave(socket);
   });
 });
 
-function removeUserFromRoom(id) {
-  rooms.forEach((room, index) => {
-    const participantIndex = room.participants.findIndex((p) => p === id);
+function join(socket, rawRoomId) {
+  const roomId = String(rawRoomId ?? "").trim();
+  if (!roomId) {
+    send(socket, { type: "error", message: "Missing room id", fatal: true });
+    return;
+  }
+  if (socket.roomId === roomId) {
+    send(socket, { type: "error", message: "You are already in this room", fatal: false });
+    return;
+  }
+  leave(socket);
 
-    if (participantIndex > -1) {
-      room.participants.splice(participantIndex, 1); // remove participant in room
+  const room = rooms.get(roomId) ?? new Set();
+  if (room.size >= 2) {
+    send(socket, { type: "error", message: "Room is full", fatal: true });
+    return;
+  }
+  room.add(socket);
+  rooms.set(roomId, room);
+  socket.roomId = roomId;
+  console.log(`join room ${roomId} (${room.size}/2)`);
 
-      if (!room.participants.length) {
-        // if after removing there's no participant left in room, then we delete the room
-        rooms.splice(index, 1);
-      }
+  // The one already waiting starts the call (sends the offer).
+  others(socket).forEach((other) => send(other, { type: "peer joined" }));
+}
+
+function leave(socket) {
+  const roomId = socket.roomId;
+  if (!roomId) return;
+  socket.roomId = null;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  room.delete(socket);
+  if (!room.size) rooms.delete(roomId);
+}
+
+function relay(socket, message) {
+  others(socket).forEach((other) => send(other, message));
+}
+
+function others(socket) {
+  const room = socket.roomId && rooms.get(socket.roomId);
+  return room ? [...room].filter((s) => s !== socket) : [];
+}
+
+function send(socket, message) {
+  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+}
+
+// A socket that stops answering pings (phone lost its network) is dropped, which frees its seat.
+const heartbeat = setInterval(() => {
+  wss.clients.forEach((socket) => {
+    if (!socket.alive) {
+      socket.terminate();
+      return;
     }
+    socket.alive = false;
+    socket.ping();
   });
+}, HEARTBEAT_MS);
+wss.on("close", () => clearInterval(heartbeat));
+
+function networkAddress() {
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === "IPv4" && !address.internal) return address.address;
+    }
+  }
+  return "localhost";
 }
 
 server.listen(port, () => {
-  console.log(`Example app listening on port ${port}!`);
-  console.log(`Network access via: ${ipAddress}:${port}!`);
+  console.log(`Signaling server listening on port ${port}`);
+  console.log(`Network access via: ${networkAddress()}:${port}`);
 });

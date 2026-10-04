@@ -28,6 +28,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -95,6 +96,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -103,6 +105,7 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.R
+import com.example.myapplication.call.CallPerson
 import com.example.myapplication.call.CallUiState
 import com.example.myapplication.call.CallViewModel
 import com.example.myapplication.call.ChatMessage
@@ -117,17 +120,28 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
-enum class CallSheet { None, More, Share, Chat, Effects }
+enum class CallSheet { None, More, Share, Chat, Effects, People }
 
 private const val CONTROLS_AUTO_HIDE_MS = 5_000L
 private const val BUBBLE_LIFETIME_MS = 6_000L
 private const val MAX_RECENT_MESSAGES = 3
 private const val CAMERA_SWITCH_TIMEOUT_MS = 1_500L
+
+/** The muted-microphone mark on video tiles, the same red as web and iOS. */
+internal val MutedRed = Color(0xFFE5484D)
+
+/** Whoever is speaking in a group call, the same green as web and iOS. */
+internal val SpeakingGreen = Color(0xFF4ADE80)
+
+/** For previews and anything without a microphone. */
+internal val NoMicLevel: StateFlow<Float> = MutableStateFlow(0f)
 
 /** Everything the call UI can ask for; [CallScreen] wires these to the [CallViewModel]. */
 class CallActions(
@@ -196,6 +210,7 @@ fun CallScreen(
         hasRemote = remoteTrack != null,
         snapshot = snapshot,
         audioLevel = audioLevel,
+        micLevel = vm.micLevel,
         events = vm.events,
         actions = actions,
         effectsCatalog = vm.effectsCatalog,
@@ -229,7 +244,6 @@ fun CallScreen(
  * Stateless call UI. Video is injected through [remoteVideo] and [localVideo] so previews and
  * screenshot tests can stand in for the GL renderers.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallContent(
     ui: CallUiState,
@@ -239,6 +253,7 @@ fun CallContent(
     actions: CallActions,
     remoteVideo: @Composable (fit: Boolean, modifier: Modifier) -> Unit,
     localVideo: @Composable (mirror: Boolean, onFrameSize: (IntSize) -> Unit, modifier: Modifier) -> Unit,
+    micLevel: StateFlow<Float> = NoMicLevel,
     events: Flow<String> = emptyFlow(),
     initialSheet: CallSheet = CallSheet.None,
     effectsCatalog: EffectsCatalog = EffectsCatalog(EffectsCatalog.BUILT_IN, emptyList()),
@@ -247,20 +262,7 @@ fun CallContent(
     /** Rotated size of the peer's frames, or zero before the first one. */
     remoteFrameSize: IntSize = IntSize.Zero
 ) {
-    val haptics = LocalHapticFeedback.current
-
-    var controlsVisible by rememberSaveable { mutableStateOf(true) }
-    var sheet by rememberSaveable { mutableStateOf(initialSheet) }
     var userFit by remember { mutableStateOf<Boolean?>(null) }
-    var interactions by remember { mutableIntStateOf(0) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val cameraSwitches = remember { Channel<Unit>(Channel.CONFLATED) }
-
-    fun switchCamera() {
-        haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
-        interactions++
-        cameraSwitches.trySend(Unit)
-    }
 
     // Filling a landscape screen with a portrait peer, or the other way round, would crop most of
     // the picture away. A rotation starts over from the default, as a new screen share does.
@@ -271,33 +273,20 @@ fun CallContent(
     val remoteFit = userFit ?: defaultFit
 
     LaunchedEffect(defaultFit) { userFit = null }
-    LaunchedEffect(events) { events.collect { snackbarHostState.showSnackbar(it) } }
-    LaunchedEffect(controlsVisible, hasRemote, sheet, interactions) {
-        if (controlsVisible && hasRemote && sheet == CallSheet.None) {
-            delay(CONTROLS_AUTO_HIDE_MS)
-            controlsVisible = false
-        }
-    }
-    LaunchedEffect(sheet) { if (sheet == CallSheet.Chat) actions.openChat() else actions.closeChat() }
-    LaunchedEffect(inPip) {
-        if (inPip) {
-            sheet = CallSheet.None
-            controlsVisible = false
-        }
-    }
-    val showChrome = !inPip && (controlsVisible || !hasRemote)
 
-    fun toggle(on: Boolean, action: () -> Unit) {
-        haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-        interactions++
-        action()
-    }
-
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
+    CallLayout(
+        ui = ui,
+        hasRemote = hasRemote,
+        actions = actions,
+        localVideo = localVideo,
+        micLevel = micLevel,
+        events = events,
+        initialSheet = initialSheet,
+        effectsCatalog = effectsCatalog,
+        inPip = inPip,
+        remoteFit = remoteFit,
+        onToggleFit = { userFit = !remoteFit }
+    ) { onTap, toggle, _ ->
         // Remote participant
         AnimatedVisibility(
             visible = hasRemote,
@@ -309,7 +298,7 @@ fun CallContent(
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = { controlsVisible = !controlsVisible },
+                            onTap = { onTap() },
                             onDoubleTap = { userFit = !remoteFit }
                         )
                     }
@@ -340,6 +329,75 @@ fun CallContent(
                 }
             }
         }
+    }
+}
+
+/**
+ * The call chrome around a remote [stage]: the local tile, top bar, waiting card, chat bubbles,
+ * toolbar and sheets. Shared by the 1:1 and the group call. [stage] gets the tap handler that
+ * shows or hides the controls, the haptic toggle helper, and whether the controls are showing.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun CallLayout(
+    ui: CallUiState,
+    hasRemote: Boolean,
+    actions: CallActions,
+    localVideo: @Composable (mirror: Boolean, onFrameSize: (IntSize) -> Unit, modifier: Modifier) -> Unit,
+    micLevel: StateFlow<Float>,
+    events: Flow<String>,
+    initialSheet: CallSheet,
+    effectsCatalog: EffectsCatalog,
+    inPip: Boolean,
+    /** Null when the stage has no single fit/fill mode (group tiles). */
+    remoteFit: Boolean?,
+    onToggleFit: () -> Unit,
+    /** Group call: everyone in the room, you first; null in a 1:1 call. */
+    people: List<CallPerson>? = null,
+    stage: @Composable (onTap: () -> Unit, toggle: (on: Boolean, action: () -> Unit) -> Unit, chromeVisible: Boolean) -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+
+    var controlsVisible by rememberSaveable { mutableStateOf(true) }
+    var sheet by rememberSaveable { mutableStateOf(initialSheet) }
+    var interactions by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val cameraSwitches = remember { Channel<Unit>(Channel.CONFLATED) }
+
+    fun switchCamera() {
+        haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+        interactions++
+        cameraSwitches.trySend(Unit)
+    }
+
+    LaunchedEffect(events) { events.collect { snackbarHostState.showSnackbar(it) } }
+    LaunchedEffect(controlsVisible, hasRemote, sheet, interactions) {
+        if (controlsVisible && hasRemote && sheet == CallSheet.None) {
+            delay(CONTROLS_AUTO_HIDE_MS)
+            controlsVisible = false
+        }
+    }
+    LaunchedEffect(sheet) { if (sheet == CallSheet.Chat) actions.openChat() else actions.closeChat() }
+    LaunchedEffect(inPip) {
+        if (inPip) {
+            sheet = CallSheet.None
+            controlsVisible = false
+        }
+    }
+    val showChrome = !inPip && (controlsVisible || !hasRemote)
+
+    fun toggle(on: Boolean, action: () -> Unit) {
+        haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+        interactions++
+        action()
+    }
+
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        stage({ controlsVisible = !controlsVisible }, { on, action -> toggle(on, action) }, showChrome)
 
         // Hidden rather than removed in the PiP window, so the tile keeps its corner.
         val stageWidth = maxWidth
@@ -347,6 +405,7 @@ fun CallContent(
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (inPip && hasRemote) 0f else 1f }) {
             LocalTile(
                 ui = ui,
+                micLevel = micLevel,
                 pip = hasRemote,
                 maxWidth = stageWidth,
                 maxHeight = stageHeight,
@@ -379,7 +438,13 @@ fun CallContent(
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            TopBar(ui, onSwitchCamera = ::switchCamera, onEnterPip = actions.enterPip?.takeIf { hasRemote })
+            TopBar(
+                ui,
+                peopleCount = people?.size?.takeIf { hasRemote },
+                onOpenPeople = { sheet = CallSheet.People },
+                onSwitchCamera = ::switchCamera,
+                onEnterPip = actions.enterPip?.takeIf { hasRemote }
+            )
         }
 
         RecentMessages(
@@ -438,7 +503,7 @@ fun CallContent(
             onToggleRemoteAudio = { toggle(!ui.remoteAudioMuted, actions.toggleRemoteAudio) },
             onToggleRemoteVideo = { toggle(!ui.remoteVideoHidden, actions.toggleRemoteVideo) },
             onOpenEffects = { sheet = CallSheet.Effects },
-            onToggleFit = { userFit = !remoteFit },
+            onToggleFit = onToggleFit,
             onSwitchCamera = ::switchCamera
         )
         CallSheet.Share -> ShareSheet(
@@ -459,6 +524,10 @@ fun CallContent(
             onDismiss = { sheet = CallSheet.None },
             preview = { modifier -> localVideo(ui.frontCamera && ui.sharing == Sharing.None, {}, modifier) }
         )
+        CallSheet.People -> PeopleSheet(
+            people = people.orEmpty(),
+            onDismiss = { sheet = CallSheet.None }
+        )
         CallSheet.None -> {}
     }
 }
@@ -468,7 +537,7 @@ fun CallContent(
  * sheet, and the controls behind it should not jump. In landscape the cutout and the navigation
  * bar move to the sides.
  */
-private val CallChromeInsets: WindowInsets
+internal val CallChromeInsets: WindowInsets
     @Composable get() = WindowInsets.systemBars.union(WindowInsets.displayCutout)
 
 private enum class Corner { TopStart, TopEnd, BottomStart, BottomEnd }
@@ -480,6 +549,7 @@ private enum class Corner { TopStart, TopEnd, BottomStart, BottomEnd }
 @Composable
 private fun LocalTile(
     ui: CallUiState,
+    micLevel: StateFlow<Float>,
     pip: Boolean,
     maxWidth: Dp,
     maxHeight: Dp,
@@ -633,23 +703,110 @@ private fun LocalTile(
                 }
             }
         }
-        if (!ui.micOn && pip) {
+        AnimatedVisibility(
+            visible = !ui.micOn && pip,
+            modifier = Modifier.align(Alignment.BottomStart),
+            enter = fadeIn() + scaleIn(spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150))
+        ) {
             Box(
                 Modifier
-                    .align(Alignment.BottomStart)
                     .padding(8.dp)
                     .size(26.dp)
                     .background(Color.Black.copy(alpha = 0.55f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(painterResource(R.drawable.ic_mic_off), "Microphone off", tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(painterResource(R.drawable.ic_mic_off), "Microphone off", tint = MutedRed, modifier = Modifier.size(16.dp))
+            }
+        }
+        // Your microphone: in the corner of the picture-in-picture (the badge above marks it muted),
+        // on the left edge while the tile is the whole screen.
+        AnimatedVisibility(
+            visible = ui.micOn && pip,
+            modifier = Modifier.align(Alignment.BottomEnd),
+            enter = fadeIn() + scaleIn(spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150))
+        ) {
+            MicLevelIndicator(micLevel, muted = false, large = false, modifier = Modifier.padding(8.dp))
+        }
+        AnimatedVisibility(
+            visible = !pip,
+            modifier = Modifier.align(Alignment.CenterStart),
+            enter = fadeIn(tween(400)) + scaleIn(spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150))
+        ) {
+            MicLevelIndicator(micLevel, muted = !ui.micOn, large = true, modifier = Modifier.padding(start = leftLimit))
+        }
+    }
+}
+
+/** The three bars Google Meet shows on your own video, so you can see the call hears you. */
+@Composable
+private fun MicLevelIndicator(level: StateFlow<Float>, muted: Boolean, large: Boolean, modifier: Modifier = Modifier) {
+    val current by level.collectAsStateWithLifecycle()
+    val animated by animateFloatAsState(
+        targetValue = if (muted) 0f else current,
+        animationSpec = tween(100),
+        label = "micLevel"
+    )
+    // Both layers stay composed and centered; the switch scales one in as the other scales out.
+    val mutedProgress by animateFloatAsState(
+        targetValue = if (muted) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
+        label = "micMuted"
+    )
+    val barWidth = if (large) 5.dp else 3.dp
+    val maxBar = if (large) 22.dp else 12.dp
+    Box(
+        modifier
+            .size(if (large) 48.dp else 26.dp)
+            .background(Color.Black.copy(alpha = 0.55f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_mic_off),
+            if (muted) "Microphone off" else null,
+            tint = MutedRed,
+            modifier = Modifier
+                .size(if (large) 22.dp else 16.dp)
+                .graphicsLayer {
+                    val scale = lerp(0.5f, 1f, mutedProgress)
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = mutedProgress.coerceIn(0f, 1f)
+                }
+        )
+        Row(
+            Modifier.graphicsLayer {
+                val scale = lerp(1f, 0.5f, mutedProgress)
+                scaleX = scale
+                scaleY = scale
+                alpha = (1f - mutedProgress).coerceIn(0f, 1f)
+            },
+            horizontalArrangement = Arrangement.spacedBy(if (large) 4.dp else 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // The middle bar moves the most.
+            for (gain in floatArrayOf(0.6f, 1f, 0.6f)) {
+                Box(
+                    Modifier
+                        .size(barWidth, lerp(barWidth, maxBar, animated * gain))
+                        .background(Color.White, CircleShape)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TopBar(ui: CallUiState, onSwitchCamera: () -> Unit, onEnterPip: (() -> Unit)?) {
+private fun TopBar(
+    ui: CallUiState,
+    /** Group call with others in it: the tappable people chip. */
+    peopleCount: Int?,
+    onOpenPeople: () -> Unit,
+    onSwitchCamera: () -> Unit,
+    onEnterPip: (() -> Unit)?
+) {
     var switches by remember { mutableIntStateOf(0) }
     val iconRotation by animateFloatAsState(
         targetValue = switches * 180f,
@@ -668,6 +825,12 @@ private fun TopBar(ui: CallUiState, onSwitchCamera: () -> Unit, onEnterPip: (() 
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         RoomPill(ui)
+        // Keeps showing the last count while the chip animates out.
+        var shownCount by remember { mutableIntStateOf(0) }
+        if (peopleCount != null) shownCount = peopleCount
+        AnimatedVisibility(visible = peopleCount != null, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+            StatusChip(R.drawable.ic_group, "$shownCount", onClick = onOpenPeople, onClickLabel = "Show everyone in the call")
+        }
         if (ui.phase == ConnectionPhase.Connected && !ui.remote.audio) {
             StatusChip(R.drawable.ic_mic_off, "Muted")
         }
@@ -772,8 +935,15 @@ private fun RoomPill(ui: CallUiState) {
 }
 
 @Composable
-private fun StatusChip(icon: Int, label: String) {
-    Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.45f), contentColor = Color.White) {
+private fun StatusChip(icon: Int, label: String, onClick: (() -> Unit)? = null, onClickLabel: String? = null) {
+    Surface(
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.45f),
+        contentColor = Color.White,
+        modifier = if (onClick != null) {
+            Modifier.clip(CircleShape).clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+        } else Modifier
+    ) {
         Row(
             Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -812,7 +982,8 @@ private fun WaitingCard(ui: CallUiState) {
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    "Join room ${ui.roomId} from another device",
+                    if (ui.group) "Join room ${ui.roomId} as a group call from other devices"
+                    else "Join room ${ui.roomId} from another device",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f)
                 )
@@ -875,7 +1046,7 @@ private fun RecentBubble(message: ChatMessage, modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             Text(
-                if (message.isLocal) "You" else "Peer",
+                if (message.isLocal) "You" else message.sender ?: "Peer",
                 style = MaterialTheme.typography.labelSmall,
                 color = LocalContentColor.current.copy(alpha = 0.7f)
             )

@@ -37,7 +37,7 @@ const shown = computed(() => props.visible
       class="glass max-w-full origin-bottom-left rounded-2xl rounded-bl-md px-3.5 py-2 text-left text-sm text-white shadow-lg shadow-black/30 transition-[background-color] hover:bg-white/15"
       @click="emit('open')"
     >
-      <span class="block text-[11px] font-semibold text-white/55">{{ message.isLocal ? 'You' : 'Them' }}</span>
+      <span class="block text-[11px] font-semibold text-white/55">{{ message.isLocal ? 'You' : message.name ?? 'Them' }}</span>
       <span class="line-clamp-3 break-words">{{ message.text }}</span>
     </button>
   </TransitionGroup>

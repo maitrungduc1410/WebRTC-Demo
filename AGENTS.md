@@ -2,7 +2,11 @@
 
 ## Project Overview
 
-**WebRTC-Demo** is a comprehensive, cross-platform WebRTC demonstration project that showcases real-time peer-to-peer communication capabilities across Web, Android, and iOS platforms. The project implements modern WebRTC APIs (currently using M125) to enable video calls, audio communication, screen sharing, and data channel messaging between multiple clients.
+**WebRTC-Demo** is a comprehensive, cross-platform WebRTC demonstration project that showcases real-time peer-to-peer communication capabilities across Web, Android, and iOS platforms. The project implements modern WebRTC APIs (webrtc-sdk M150 on native) to enable video calls, audio communication, screen sharing, and data channel messaging between multiple clients.
+
+Two call modes:
+- **1:1 peer to peer (default).** Needs only `signaling-server/`. Keep this path zero-setup and its code easy to read: it is the main learning material.
+- **Group call through an SFU (optional, advanced).** Needs `sfu-server/` (Go + Pion), which does both signaling and media forwarding. Clients still use only standard WebRTC APIs (no SFU SDK). See ARCHITECTURE.md section 12.
 
 ## Architecture
 
@@ -25,7 +29,7 @@ The project follows a client-server architecture with the following components:
 │              │  Signaling      │                            │
 │              │  Server         │                            │
 │              │  (Node.js +     │                            │
-│              │   Socket.io)    │                            │
+│              │   WebSocket)    │                            │
 │              └─────────────────┘                            │
 │                                                              │
 │        P2P Connection (WebRTC - STUN/TURN)                  │
@@ -40,15 +44,15 @@ The project follows a client-server architecture with the following components:
 
 **Technology Stack:**
 - Node.js
-- Express.js
-- Socket.io
+- `ws` (plain WebSocket on `/ws`, JSON text frames with a `type`)
 
 **Purpose:**
 The signaling server facilitates the initial peer discovery and exchange of connection information (SDP offers/answers and ICE candidates) between WebRTC clients. It does not handle the actual media streaming.
 
 **Key Features:**
 - Room-based architecture (max 2 participants per room)
-- WebSocket-based real-time communication
+- WebSocket-based real-time communication; `GET /` answers `{"name":"signaling-server","ok":true}` for the web lobby's status dot
+- No reconnect: a client whose signaling socket closes ends the call (documented in ARCHITECTURE.md section 4). Keep it that way unless the user asks for reconnects
 - SDP offer/answer exchange
 - ICE candidate relay
 - Room management and participant tracking
@@ -60,15 +64,44 @@ The signaling server facilitates the initial peer discovery and exchange of conn
 4. **ICE Candidate Exchange**: Both peers exchange ICE candidates
 5. **P2P Connection**: Direct peer-to-peer connection established
 
-**Server Events:**
-- `join room` - Client joins a specific room
-- `offer` - Send WebRTC offer to peer
-- `answer` - Send WebRTC answer to peer
-- `new ice candidate` - Exchange ICE candidates
-- `receive encryption key` - Exchange E2EE keys (web, Android, iOS)
-- `media state` - Relay `{audio, video, screen}` so the peer knows when the camera or microphone is off
-- `send data channel message` - Relay data channel messages
-- `leave room` - Leave the current room
+**Messages** (full table in ARCHITECTURE.md section 3):
+- `join {roomId}` - Join a room; the peer already in it gets `peer joined` and sends the offer
+- `offer {sdp}` / `answer {sdp}` - Relayed to the other peer
+- `candidate {candidate}` - Trickle ICE, relayed
+- `encryption key {key}` - 32 bytes of E2EE key material as base64, relayed; acknowledged with `encryption key received`
+- `media state {state}` - Relay `{audio, video, screen}` so the peer knows when the camera or microphone is off
+- `leave` - Leave the current room
+- `error {message, fatal}` - From the server; `Room is full` is fatal
+
+#### 1b. SFU Server (`sfu-server/`, optional)
+
+**Technology Stack:**
+- Go 1.24, `github.com/pion/webrtc/v4`, `github.com/gorilla/websocket`
+
+**Purpose:**
+Group calls (8 per room by default, `-max-participants` / `MAX_PARTICIPANTS`). One process serves the signaling WebSocket at `ws://<host>:4001/ws` and forwards RTP between participants without decoding. All PeerConnections share UDP port 4001.
+
+**Rules when changing it:**
+- The JSON protocol is documented in ARCHITECTURE.md section 12.4 and implemented by all three clients; change them together.
+- Two PeerConnections per participant: the client always offers on `publish` (never renegotiated), the server always offers on `subscribe` (renegotiated on every track add/remove, one offer in flight, a pending flag for the next one).
+- Forwarded tracks use stream id = participant id and track id = `<participantId>-audio` / `<participantId>-video`; clients map tiles with the stream id. Keep track ids unique in the room: libwebrtc names remote receivers after them, and Android/iOS key receivers (and E2EE decryptors) by receiver id.
+- Only VP8 and Opus are registered. Header extensions are stripped before forwarding (ids differ per connection).
+- The server does not trickle ICE (it waits for gathering before sending SDP); client candidates that arrive before the remote description are buffered.
+- Lock order: `server.mu`, then `room.mu`. Socket writes go through the per-connection queue so no lock waits on the network.
+- Run `go vet ./... && go test -race ./...` in `sfu-server/`; the tests run real Pion clients over loopback.
+
+**Group mode in the clients** (ARCHITECTURE.md sections 12.7–12.9). Each client keeps the 1:1 engine and adds a group engine; both share one local media layer and one E2EE helper, so capture, sharing, backgrounds and effects and the 300 ms camera rule are written once:
+
+| | Shared media | Shared E2EE | 1:1 engine | Group engine | Group UI |
+|---|---|---|---|---|---|
+| Web | `call/media.ts` | `call/frameCrypto.ts` | `call/useCall.ts` | `call/useGroupCall.ts` (browser `WebSocket`) | `components/call/GroupCallView.vue`, `GroupTile.vue` |
+| Android | `webrtc/LocalMedia.kt` | `webrtc/FrameCryptors.kt` | `webrtc/PeerConnectionClient.kt` | `webrtc/sfu/` (OkHttp WebSocket) | `ui/call/GroupCallScreen.kt`, `call/GroupCallViewModel.kt` |
+| iOS | `LocalMedia.swift` | `FrameEncryption.swift` | `PeerConnectionClient.swift` | `GroupCallClient.swift` (`URLSessionWebSocketTask`) | `GroupCallView.swift` |
+
+- The lobby defaults to 1:1. The "Group call (SFU)" switch and the SFU address (saved under its own key, default port 4001) are secondary.
+- Subscribe offers are answered one at a time; receiver decryptors are attached to every receiver, including recycled ones. Tracks map to participants by stream id, and tiles come from `joined` / `participant joined` / `participant left`.
+- Never renegotiate the publish PC: source switches stay `replaceTrack` / `setTrack` / the same video source.
+- On Android, every group PeerConnection call runs on the main thread and callbacks after the call ended are dropped (a disposed native PeerConnection crashes the process).
 
 #### 2. Web Client (`web/`)
 
@@ -76,14 +109,13 @@ The signaling server facilitates the initial peer discovery and exchange of conn
 - Vue.js 3 (Composition API)
 - TypeScript
 - Vite (build tool)
-- Socket.io-client
-- Native WebRTC API
+- Native WebSocket and WebRTC APIs
 
 **Architecture:**
 ```
 App.vue
 ├── WebRTC PeerConnection Management
-├── Socket.io Connection
+├── Signaling WebSocket (opened on join, closed on leave)
 ├── Media Stream Management
 │   ├── Local Camera/Microphone
 │   ├── Screen Sharing
@@ -127,7 +159,7 @@ App.vue
    - The header is the AES-GCM additional data; for H264 the rest is RBSP-escaped
 
    **E2EE Process**:
-   - The peer already in the room generates the key material and sends it via `send encryption key` before the offer
+   - The peer already in the room generates the key material and sends it via `encryption key` (base64) before the offer
    - The joining peer sets the key when it receives `receive encryption key`
    - Every platform puts VP8 first in the video codec preferences when E2EE is on; iOS does it on every call so screen sharing keeps encoding in the background
    - Frames that cannot be encrypted/decrypted (no key yet, bad frame) are dropped, never forwarded in plain form
@@ -157,7 +189,8 @@ WebRTCDemo (Main App)
 ├── WebRTCDemoApp.swift (@main app, lobby -> call as a full screen cover)
 ├── LobbyView.swift (Room ID, E2EE toggle, signaling server sheet)
 ├── SignalingServer.swift (saved server address, normalization)
-├── CallViewModel.swift (@Observable call state, Socket.IO signaling)
+├── CallViewModel.swift (@Observable call state, 1:1 signaling messages)
+├── SignalingSocket.swift (JSON over URLSessionWebSocketTask, used by both call modes)
 ├── CallView.swift (Call screen: remote stage, draggable PiP, overlays, pickers)
 ├── CallControls.swift (Glass toolbar, share menu, More sheet)
 ├── ChatView.swift (Chat sheet)
@@ -193,7 +226,7 @@ WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
    - Owns no views; delegate callbacks can arrive on any thread
 
 2. **CallViewModel.swift**
-   - Socket.IO connection and signaling events, including `media state`
+   - 1:1 signaling over `SignalingSocket`, including `media state`; a closed socket ends the call
    - All call state the UI renders, mutated on the main queue only
    - Camera off: sends `media state` first and disables the track 300 ms later (the reverse when turning on)
 
@@ -252,7 +285,7 @@ android/app/src/main/java/com/example/myapplication/
 │   ├── call/ (CallScreen, CallControls, ChatSheet, EffectsSheet, PeerPlaceholder, CallPreviews)
 │   ├── video/ (TextureViewRenderer, VideoRenderer, FrameSnapshotter)
 │   └── theme/Theme.kt (MaterialExpressiveTheme, dynamic color)
-└── webrtc/ (PeerConnectionClient, WebRtcPeer, RtcListener, SignalingHandler, E2eeManager, Mp4VideoCapturer, effects/)
+└── webrtc/ (PeerConnectionClient, WebRtcPeer, RtcListener, SignalingHandler, SignalingSocket (OkHttp, both modes), E2eeManager, Mp4VideoCapturer, effects/)
 ```
 
 **Key Features:**
@@ -356,6 +389,13 @@ The project uses Google's public STUN server:
    - Open project in Android Studio
    - Build and run, then set the signaling server address in the lobby
 
+5. **Group calls (optional)**
+   ```bash
+   cd sfu-server
+   go run .
+   ```
+   TCP + UDP port 4001. In the lobby, switch to "Group call (SFU)" and set the SFU address
+
 ### Usage Flow
 
 1. Start signaling server and note the IP address
@@ -404,7 +444,7 @@ Encrypted Frame ◄───────── Return Encrypted
 ### Room Management
 
 Rooms are temporary and in-memory:
-- **Maximum Capacity**: 2 participants
+- **Maximum Capacity**: 2 participants (1:1 mode); 8 by default in `sfu-server` group rooms, set with `-max-participants` / `MAX_PARTICIPANTS`
 - **Lifecycle**: Created when first user joins, implicitly destroyed when empty
 - **Identification**: String-based room IDs
 - **Validation**: Prevents duplicate joins, full room notifications
@@ -471,9 +511,9 @@ Rooms are temporary and in-memory:
    - Play video files to remote peer
    - Use `RTCVideoSource` with custom capturer
 
-3. **Multi-Party Conferencing**
-   - Mesh, SFU, or MCU architecture
-   - More than 2 participants per room
+3. **Group calls (SFU) follow-ups**
+   - Simulcast (`sendEncodings` with `rid`) and per-subscriber layer selection in `sfu-server`
+   - TURN, several SFU nodes, E2EE key rotation when someone leaves
 
 4. **Recording**
    - Record calls locally

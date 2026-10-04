@@ -12,6 +12,8 @@ const props = defineProps<{
   connected: boolean
   closable?: boolean
   autofocus?: boolean
+  /** Group call: messages go to everyone through the SFU server. */
+  group?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,11 @@ const list = ref<HTMLElement>()
 const input = ref<InstanceType<typeof Input>>()
 
 const hint = computed(() => {
+  if (props.group) {
+    if (!props.ready) return 'Connecting the chat…'
+    if (!props.connected) return 'Messages go to everyone who is in the call when you send them.'
+    return 'Messages go to everyone in the call and disappear when it ends.'
+  }
   if (!props.connected) return 'Chat opens once the other person joins.'
   if (!props.ready) return 'Connecting the chat…'
   return 'Messages go straight to the other person and disappear when the call ends.'
@@ -56,7 +63,8 @@ function time(timestamp: number) {
 function startsGroup(index: number) {
   const previous = props.messages[index - 1]
   const message = props.messages[index]!
-  return !previous || previous.isLocal !== message.isLocal || message.timestamp - previous.timestamp > 60_000
+  return !previous || previous.isLocal !== message.isLocal || previous.name !== message.name
+    || message.timestamp - previous.timestamp > 60_000
 }
 </script>
 
@@ -65,7 +73,7 @@ function startsGroup(index: number) {
     <div class="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
       <div>
         <h2 class="text-base font-semibold">In-call messages</h2>
-        <p class="text-xs text-muted-foreground">Peer-to-peer over a WebRTC data channel</p>
+        <p class="text-xs text-muted-foreground">{{ props.group ? 'Relayed by the group call server' : 'Peer-to-peer over a WebRTC data channel' }}</p>
       </div>
       <Button v-if="props.closable" variant="ghost" size="icon" aria-label="Close chat" @click="emit('close')">
         <X />
@@ -99,7 +107,7 @@ function startsGroup(index: number) {
           :style="{ transformOrigin: message.isLocal ? 'bottom right' : 'bottom left' }"
         >
           <span v-if="startsGroup(index)" class="mb-1 px-1 text-[11px] text-muted-foreground">
-            {{ message.isLocal ? 'You' : 'Them' }} · {{ time(message.timestamp) }}
+            {{ message.isLocal ? 'You' : message.name ?? 'Them' }} · {{ time(message.timestamp) }}
           </span>
           <p
             :class="cn(

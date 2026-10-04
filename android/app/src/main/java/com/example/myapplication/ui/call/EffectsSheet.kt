@@ -97,7 +97,7 @@ fun EffectsSheet(
                 modifier = Modifier.padding(start = 8.dp)
             )
             Text(
-                "Only your camera changes. The other person sees what your preview shows.",
+                "Only your camera changes. Others in the call see what your preview shows.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 12.dp)

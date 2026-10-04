@@ -270,6 +270,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         :controls-visible="showChrome"
         :compact="compact"
         :mic-on="call.micOn.value"
+        :mic-level="call.micLevel.value"
         :camera-on="call.cameraOn.value"
         :sharing="call.sharing.value"
         @tap="wake"

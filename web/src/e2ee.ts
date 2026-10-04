@@ -21,6 +21,19 @@ export function generateKeyMaterial(): ArrayBuffer {
   return crypto.getRandomValues(new Uint8Array(KEY_MATERIAL_LENGTH)).buffer;
 }
 
+/** Key material travels as base64 in the JSON signaling messages. */
+export function toBase64(buffer: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+}
+
+/** Throws on invalid base64. */
+export function fromBase64(text: string): ArrayBuffer {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 export async function deriveFrameKey(material: ArrayBuffer): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(

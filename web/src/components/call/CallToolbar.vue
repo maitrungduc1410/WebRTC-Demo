@@ -4,7 +4,7 @@ import {
   Ellipsis, FileVideo, Maximize, MessageSquare, Mic, MicOff, Minimize, MonitorOff, MonitorUp,
   PhoneOff, PictureInPicture2, Sparkles, SwitchCamera, Video, VideoOff, Volume2, VolumeOff, Eye, EyeOff,
 } from '@lucide/vue'
-import type { Call } from '@/call/useCall'
+import type { CallControls } from '@/call/types'
 import {
   DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut,
 } from '@/components/ui/dropdown-menu'
@@ -12,7 +12,9 @@ import { Separator } from '@/components/ui/separator'
 import ToolbarButton from './ToolbarButton.vue'
 
 const props = defineProps<{
-  call: Call
+  call: CallControls
+  /** Group call: remote options apply to everyone, and tiles fit on their own. */
+  group?: boolean
   compact: boolean
   chatOpen: boolean
   unread: number
@@ -74,7 +76,7 @@ function onShare() {
     />
     <ToolbarButton v-else :icon="MonitorUp" label="Present">
       <template #menu>
-        <DropdownMenuLabel>Present to the other person</DropdownMenuLabel>
+        <DropdownMenuLabel>{{ props.group ? 'Present to everyone' : 'Present to the other person' }}</DropdownMenuLabel>
         <DropdownMenuItem @select="call.shareScreen">
           <MonitorUp /> Your screen, a window or a tab
         </DropdownMenuItem>
@@ -108,14 +110,14 @@ function onShare() {
     <ToolbarButton v-if="props.compact" :icon="Ellipsis" label="More options" @click="emit('openMore')" />
     <ToolbarButton v-else :icon="Ellipsis" label="More options" menu-align="end">
       <template #menu>
-        <DropdownMenuLabel>The other person</DropdownMenuLabel>
+        <DropdownMenuLabel>{{ props.group ? 'Everyone else' : 'The other person' }}</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           :model-value="call.remoteAudioMuted.value"
           :disabled="!connected"
           @select.prevent="call.toggleRemoteAudio"
         >
           <VolumeOff v-if="call.remoteAudioMuted.value" /><Volume2 v-else />
-          Mute their audio
+          {{ props.group ? 'Mute everyone' : 'Mute their audio' }}
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           :model-value="call.remoteVideoHidden.value"
@@ -123,9 +125,9 @@ function onShare() {
           @select.prevent="call.toggleRemoteVideo"
         >
           <EyeOff v-if="call.remoteVideoHidden.value" /><Eye v-else />
-          Hide their video
+          {{ props.group ? 'Hide all video' : 'Hide their video' }}
         </DropdownMenuCheckboxItem>
-        <DropdownMenuItem :disabled="!connected" @select="emit('toggleFit')">
+        <DropdownMenuItem v-if="!props.group" :disabled="!connected" @select="emit('toggleFit')">
           <Maximize v-if="props.fit" /><Minimize v-else />
           {{ props.fit ? 'Fill the window' : 'Fit to window' }}
           <DropdownMenuShortcut>F</DropdownMenuShortcut>

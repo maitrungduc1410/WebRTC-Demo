@@ -6,14 +6,16 @@
 import SwiftUI
 
 struct LobbyView: View {
-    let onJoin: (_ roomId: String, _ e2ee: Bool) -> Void
+    let onJoin: (_ roomId: String, _ e2ee: Bool, _ group: Bool) -> Void
 
     @State private var roomId = LobbyView.randomRoomId()
     @State private var e2ee = false
+    @State private var group = false
     @State private var shuffleTurns = 0.0
     @State private var joins = 0
     @State private var serverURL = SignalingServer.current
-    @State private var editingServer = false
+    @State private var sfuURL = SFUServer.current
+    @State private var editingServer: ServerKind?
     @FocusState private var roomFieldFocused: Bool
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -51,13 +53,28 @@ struct LobbyView: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                serverButton
+                VStack(spacing: 0) {
+                    serverButton(.signaling, url: serverURL)
+                    if group {
+                        serverButton(.sfu, url: sfuURL)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
             }
         }
-        .sheet(isPresented: $editingServer) {
-            ServerSheet(current: serverURL) { url in
-                SignalingServer.current = url
-                serverURL = url
+        // The room field stays above the number pad even on the smallest iPhone, so the keyboard never
+        // needs to move the form.
+        .ignoresSafeArea(.keyboard)
+        .sheet(item: $editingServer) { kind in
+            ServerSheet(kind: kind, current: kind == .sfu ? sfuURL : serverURL) { url in
+                switch kind {
+                case .signaling:
+                    SignalingServer.current = url
+                    serverURL = url
+                case .sfu:
+                    SFUServer.current = url
+                    sfuURL = url
+                }
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: joins)
@@ -102,21 +119,36 @@ struct LobbyView: View {
                             if digits != value { roomId = digits }
                         }
 
+                    // While typing it closes the number pad, which has no return key. SwiftUI's
+                    // keyboard toolbar (Done) sometimes never shows, which left no way out.
                     Button {
+                        if roomFieldFocused {
+                            roomFieldFocused = false
+                            return
+                        }
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                             shuffleTurns += 1
                             roomId = Self.randomRoomId()
                         }
                     } label: {
-                        Image(systemName: "shuffle")
-                            .font(.title3.weight(.semibold))
-                            .rotationEffect(.degrees(shuffleTurns * 180))
-                            .frame(width: 60, height: 60)
-                            .contentShape(.circle)
+                        ZStack {
+                            if roomFieldFocused {
+                                Image(systemName: "checkmark")
+                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            } else {
+                                Image(systemName: "shuffle")
+                                    .rotationEffect(.degrees(shuffleTurns * 180))
+                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            }
+                        }
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 60, height: 60)
+                        .contentShape(.circle)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: roomFieldFocused)
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .circle)
-                    .accessibilityLabel("Random room")
+                    .accessibilityLabel(roomFieldFocused ? "Done" : "Random room")
                 }
 
                 Toggle(isOn: $e2ee.animation(.snappy)) {
@@ -124,7 +156,7 @@ struct LobbyView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("End-to-end encryption")
                                 .font(.body.weight(.medium))
-                            Text(e2ee ? "Frames are encrypted on this device" : "Both peers must turn it on")
+                            Text(e2ee ? "Frames are encrypted on this device" : (group ? "Everyone must turn it on" : "Both peers must turn it on"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .contentTransition(.opacity)
@@ -139,9 +171,11 @@ struct LobbyView: View {
                 .padding(.vertical, 14)
                 .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
 
+                groupToggle
+
                 Button(action: join) {
                     HStack(spacing: 10) {
-                        Text("Join room")
+                        Text(group ? "Join group call" : "Join room")
                         Image(systemName: "arrow.right")
                     }
                     .font(.headline)
@@ -155,14 +189,38 @@ struct LobbyView: View {
         }
     }
 
-    private var serverButton: some View {
+    /// Group calls are an advanced mode, so this stays smaller than the E2EE switch.
+    private var groupToggle: some View {
+        Toggle(isOn: $group.animation(.snappy)) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Group call (SFU)")
+                        .font(.subheadline.weight(.medium))
+                    Text(group ? "More than 2 people through the SFU server" : "Advanced: needs sfu-server")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.opacity)
+                }
+            } icon: {
+                Image(systemName: group ? "person.3.fill" : "person.2.fill")
+                    .contentTransition(.symbolEffect(.replace))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24, style: .continuous))
+    }
+
+    private func serverButton(_ kind: ServerKind, url: String) -> some View {
         Button {
             roomFieldFocused = false
-            editingServer = true
+            editingServer = kind
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "server.rack")
-                Text(serverURL)
+                Image(systemName: kind.systemImage)
+                Text(url)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Image(systemName: "pencil")
@@ -176,15 +234,15 @@ struct LobbyView: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 24)
-        .accessibilityLabel("Signaling server, \(serverURL)")
-        .accessibilityHint("Changes the signaling server")
+        .accessibilityLabel("\(kind.title), \(url)")
+        .accessibilityHint("Changes the \(kind.title.lowercased())")
     }
 
     private func join() {
         guard !roomId.isEmpty else { return }
         roomFieldFocused = false
         joins += 1
-        onJoin(roomId, e2ee)
+        onJoin(roomId, e2ee, group)
     }
 
     private static func randomRoomId() -> String {
@@ -192,8 +250,42 @@ struct LobbyView: View {
     }
 }
 
-/// Edits the signaling server address. Saving normalizes it so the lobby always shows what calls will use.
+/// The two servers the lobby can point at: the signaling server for 1:1 calls, the SFU for group calls.
+private enum ServerKind: String, Identifiable {
+    case signaling, sfu
+
+    var id: String { rawValue }
+
+    var title: String {
+        self == .sfu ? "SFU server" : "Signaling server"
+    }
+
+    var systemImage: String {
+        self == .sfu ? "point.3.connected.trianglepath.dotted" : "server.rack"
+    }
+
+    var example: String {
+        self == .sfu ? "http://192.168.1.10:4001" : "http://192.168.1.10:4000"
+    }
+
+    var help: String {
+        self == .sfu
+            ? "The address of sfu-server, used for group calls. Port 4001 is used when none is given. It is saved on this device."
+            : "The address printed when you start the signaling server. It is saved on this device."
+    }
+
+    var defaultURL: String {
+        self == .sfu ? SFUServer.defaultURL : SignalingServer.defaultURL
+    }
+
+    func normalize(_ text: String) -> String? {
+        self == .sfu ? SFUServer.normalize(text) : SignalingServer.normalize(text)
+    }
+}
+
+/// Edits a server address. Saving normalizes it so the lobby always shows what calls will use.
 private struct ServerSheet: View {
+    let kind: ServerKind
     let onSave: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -201,7 +293,8 @@ private struct ServerSheet: View {
     @State private var invalid = false
     @FocusState private var focused: Bool
 
-    init(current: String, onSave: @escaping (String) -> Void) {
+    init(kind: ServerKind, current: String, onSave: @escaping (String) -> Void) {
+        self.kind = kind
         self.onSave = onSave
         _text = State(initialValue: current)
     }
@@ -209,7 +302,7 @@ private struct ServerSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                TextField("http://192.168.1.10:4000", text: $text)
+                TextField(kind.example, text: $text)
                     .keyboardType(.URL)
                     .textContentType(.URL)
                     .textInputAutocapitalization(.never)
@@ -225,10 +318,10 @@ private struct ServerSheet: View {
 
                 Group {
                     if invalid {
-                        Label("Use an address like http://192.168.1.10:4000", systemImage: "exclamationmark.circle.fill")
+                        Label("Use an address like \(kind.example)", systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(.red)
                     } else {
-                        Text("The address printed when you start the signaling server. It is saved on this device.")
+                        Text(kind.help)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -236,11 +329,11 @@ private struct ServerSheet: View {
                 .padding(.horizontal, 8)
                 .transition(.opacity)
 
-                if text != SignalingServer.defaultURL {
+                if text != kind.defaultURL {
                     Button {
-                        text = SignalingServer.defaultURL
+                        text = kind.defaultURL
                     } label: {
-                        Label("Use default · \(SignalingServer.defaultURL)", systemImage: "arrow.counterclockwise")
+                        Label("Use default · \(kind.defaultURL)", systemImage: "arrow.counterclockwise")
                             .font(.footnote.weight(.medium))
                     }
                     .padding(.horizontal, 8)
@@ -251,8 +344,8 @@ private struct ServerSheet: View {
             }
             .padding(20)
             .animation(.snappy, value: invalid)
-            .animation(.snappy, value: text == SignalingServer.defaultURL)
-            .navigationTitle("Signaling server")
+            .animation(.snappy, value: text == kind.defaultURL)
+            .navigationTitle(kind.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -271,7 +364,7 @@ private struct ServerSheet: View {
     }
 
     private func save() {
-        guard let url = SignalingServer.normalize(text) else {
+        guard let url = kind.normalize(text) else {
             invalid = true
             return
         }
@@ -354,9 +447,9 @@ private struct HeroBadge: View {
 }
 
 #Preview {
-    LobbyView { _, _ in }
+    LobbyView { _, _, _ in }
 }
 
 #Preview("Landscape", traits: .landscapeLeft) {
-    LobbyView { _, _ in }
+    LobbyView { _, _, _ in }
 }

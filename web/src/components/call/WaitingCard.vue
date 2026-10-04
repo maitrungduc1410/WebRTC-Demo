@@ -8,6 +8,7 @@ const props = defineProps<{
   roomId: string
   phase: Phase
   e2ee: boolean
+  group?: boolean
 }>()
 
 const emit = defineEmits<{ copied: [] }>()
@@ -55,10 +56,12 @@ async function copyRoomId() {
     </div>
 
     <p class="mt-3 text-sm text-white/60">
-      Open the app on another device and join the same room.
+      {{ props.group
+        ? 'Open the app on other devices, choose Group call (SFU) and join the same room.'
+        : 'Open the app on another device and join the same room.' }}
     </p>
     <p v-if="props.e2ee" class="mt-2 flex items-center gap-1.5 text-xs text-emerald-300">
-      <Lock class="size-3.5" /> End-to-end encryption is on. The other person must turn it on too.
+      <Lock class="size-3.5" /> End-to-end encryption is on. {{ props.group ? 'Everyone' : 'The other person' }} must turn it on too.
     </p>
   </div>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Call } from '@/call/useCall'
+import type { EffectsControls } from '@/call/types'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import EffectsPicker from './EffectsPicker.vue'
@@ -7,12 +7,12 @@ import EffectsPicker from './EffectsPicker.vue'
 const open = defineModel<boolean>('open', { required: true })
 
 defineProps<{
-  call: Call
+  call: EffectsControls
   /** Phones get a bottom drawer, wider screens a side sheet. */
   compact: boolean
 }>()
 
-const DESCRIPTION = 'Only your camera changes. The other person sees what your preview shows.'
+const DESCRIPTION = 'Only your camera changes. Others in the call see what your preview shows.'
 </script>
 
 <template>

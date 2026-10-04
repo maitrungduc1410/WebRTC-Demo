@@ -151,7 +151,8 @@ private fun ToolbarToggle(
 @Composable
 fun MoreSheet(
     ui: CallUiState,
-    remoteFit: Boolean,
+    /** Null hides the fit/fill option (group tiles pick their own). */
+    remoteFit: Boolean?,
     onDismiss: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onToggleRemoteAudio: () -> Unit,
@@ -193,7 +194,10 @@ fun MoreSheet(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OptionTile(
                     icon = if (ui.remoteAudioMuted) R.drawable.ic_volume_off else R.drawable.ic_volume_up,
-                    label = if (ui.remoteAudioMuted) "Peer audio muted" else "Mute peer audio",
+                    label = when {
+                        ui.group -> if (ui.remoteAudioMuted) "Everyone muted" else "Mute everyone"
+                        else -> if (ui.remoteAudioMuted) "Peer audio muted" else "Mute peer audio"
+                    },
                     checked = ui.remoteAudioMuted,
                     enabled = hasPeer,
                     onClick = onToggleRemoteAudio,
@@ -201,7 +205,10 @@ fun MoreSheet(
                 )
                 OptionTile(
                     icon = if (ui.remoteVideoHidden) R.drawable.ic_visibility_off else R.drawable.ic_visibility,
-                    label = if (ui.remoteVideoHidden) "Peer video hidden" else "Hide peer video",
+                    label = when {
+                        ui.group -> if (ui.remoteVideoHidden) "Videos hidden" else "Hide everyone's video"
+                        else -> if (ui.remoteVideoHidden) "Peer video hidden" else "Hide peer video"
+                    },
                     checked = ui.remoteVideoHidden,
                     enabled = hasPeer,
                     onClick = onToggleRemoteVideo,
@@ -210,14 +217,16 @@ fun MoreSheet(
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OptionTile(
-                    icon = if (remoteFit) R.drawable.ic_fit_screen else R.drawable.ic_crop_free,
-                    label = if (remoteFit) "Fit to screen" else "Fill screen",
-                    checked = remoteFit,
-                    enabled = hasPeer,
-                    onClick = onToggleFit,
-                    modifier = Modifier.weight(1f)
-                )
+                if (remoteFit != null) {
+                    OptionTile(
+                        icon = if (remoteFit) R.drawable.ic_fit_screen else R.drawable.ic_crop_free,
+                        label = if (remoteFit) "Fit to screen" else "Fill screen",
+                        checked = remoteFit,
+                        enabled = hasPeer,
+                        onClick = onToggleFit,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 OptionTile(
                     icon = R.drawable.ic_cameraswitch,
                     label = if (ui.frontCamera) "Front camera" else "Back camera",
@@ -226,9 +235,11 @@ fun MoreSheet(
                     onClick = onSwitchCamera,
                     modifier = Modifier.weight(1f)
                 )
+                if (remoteFit == null) Spacer(Modifier.weight(1f))
             }
             Text(
-                "Muting or hiding the peer only affects this device. Double-tap the video to switch fit and fill.",
+                if (ui.group) "Muting or hiding the others only affects this device. Double-tap a tile to switch fit and fill."
+                else "Muting or hiding the peer only affects this device. Double-tap the video to switch fit and fill.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 8.dp, top = 16.dp, end = 8.dp)

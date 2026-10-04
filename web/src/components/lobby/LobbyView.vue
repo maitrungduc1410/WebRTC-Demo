@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
 import { motion } from 'motion-v'
-import { ArrowRight, Lock, LockOpen, MessagesSquare, MonitorUp, Shuffle, Video } from '@lucide/vue'
+import { ArrowRight, Lock, LockOpen, MessagesSquare, MonitorUp, Shuffle, User, Users, Video } from '@lucide/vue'
+import { callMode, type CallMode } from '@/call/callMode'
+import { DEFAULT_SERVER_URL, DEFAULT_SFU_URL } from '@/call/serverUrl'
 import { randomRoomId, useCall } from '@/call/useCall'
+import { useGroupCall } from '@/call/useGroupCall'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -12,7 +16,10 @@ import HeroBadge from './HeroBadge.vue'
 import LobbyBackdrop from './LobbyBackdrop.vue'
 import ServerSetting from './ServerSetting.vue'
 
+const SERVER_PROBE_INTERVAL_MS = 5000
+
 const call = useCall()
+const group = useGroupCall()
 const coarse = useCoarsePointer()
 const shuffleTurns = ref(0)
 const serverSetting = ref<InstanceType<typeof ServerSetting>>()
@@ -36,9 +43,43 @@ function shuffle() {
   call.roomId.value = randomRoomId()
 }
 
+const modes: { id: CallMode; label: string; icon: typeof User }[] = [
+  { id: 'p2p', label: '1:1 call', icon: User },
+  { id: 'group', label: 'Group call (SFU)', icon: Users },
+]
+const selectedMode = computed({ get: () => callMode.value, set: mode => { callMode.value = mode } })
+const isGroup = computed(() => selectedMode.value === 'group')
+
+const server = computed(() => isGroup.value
+  ? {
+      label: 'Group call server',
+      url: group.serverUrl.value,
+      status: group.serverStatus.value,
+      defaultUrl: DEFAULT_SFU_URL,
+      placeholder: 'http://192.168.1.10:4001',
+      setUrl: group.setServerUrl,
+    }
+  : {
+      label: 'Signaling server',
+      url: call.serverUrl.value,
+      status: call.serverStatus.value,
+      defaultUrl: DEFAULT_SERVER_URL,
+      placeholder: 'http://192.168.1.10:4000',
+      setUrl: call.setServerUrl,
+    })
+
+// Neither server has a connection before a call, so the status dot comes from polling GET /.
+function checkServer() {
+  if (isGroup.value) group.checkServer()
+  else call.checkServer()
+}
+watch(isGroup, checkServer, { immediate: true })
+useIntervalFn(checkServer, SERVER_PROBE_INTERVAL_MS)
+
 function join() {
   if (!call.roomId.value || serverSetting.value?.commit() === false) return
-  call.join()
+  if (isGroup.value) group.join(call.roomId.value, call.e2ee.value)
+  else call.join()
 }
 
 const rise = (delay: number) => ({
@@ -144,7 +185,7 @@ const rise = (delay: number) => ({
           <span class="flex-1">
             <span class="block text-sm font-medium">End-to-end encryption</span>
             <span class="block text-xs text-muted-foreground">
-              {{ call.e2ee.value ? 'Frames are encrypted on this device' : 'Both people must turn it on' }}
+              {{ call.e2ee.value ? 'Frames are encrypted on this device' : isGroup ? 'Everyone must turn it on' : 'Both people must turn it on' }}
             </span>
           </span>
           <Switch v-model="call.e2ee.value" aria-label="End-to-end encryption" />
@@ -156,11 +197,40 @@ const rise = (delay: number) => ({
           class="group mt-5 h-14 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/30 transition-[scale,background-color,box-shadow] duration-300 ease-bounce active:scale-[0.98]"
           :disabled="!call.roomId.value"
         >
-          Join room
+          {{ isGroup ? 'Join group call' : 'Join room' }}
           <ArrowRight class="size-5 transition-transform duration-300 ease-bounce group-hover:translate-x-1" />
         </Button>
 
-        <ServerSetting ref="serverSetting" :join-hint="!coarse" />
+        <div role="radiogroup" aria-label="Call type" class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-muted/50 p-1 text-xs">
+          <button
+            v-for="mode in modes"
+            :key="mode.id"
+            type="button"
+            role="radio"
+            :aria-checked="selectedMode === mode.id"
+            :class="cn(
+              'inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-3 font-medium transition-[background-color,color,box-shadow] duration-200',
+              'focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
+              selectedMode === mode.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )"
+            @click="selectedMode = mode.id"
+          >
+            <component :is="mode.icon" class="size-3.5" />
+            {{ mode.label }}
+          </button>
+        </div>
+
+        <ServerSetting
+          ref="serverSetting"
+          :key="selectedMode"
+          :join-hint="!coarse"
+          :label="server.label"
+          :url="server.url"
+          :status="server.status"
+          :default-url="server.defaultUrl"
+          :placeholder="server.placeholder"
+          :set-url="server.setUrl"
+        />
       </motion.form>
     </div>
   </div>

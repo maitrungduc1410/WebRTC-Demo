@@ -52,7 +52,7 @@ struct VideoView: UIViewRepresentable {
     }
 }
 
-/// The remote video, animating between filling the screen and fitting inside it. The video view
+/// A remote video (the 1:1 stage or a group tile), animating between filling its bounds and fitting inside them. The video view
 /// always has the frame's aspect ratio, just large enough to cover the bounds, and fit only scales
 /// it down, so the Metal view is never resized mid animation.
 struct StageVideoView: View {

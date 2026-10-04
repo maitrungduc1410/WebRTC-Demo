@@ -4,6 +4,7 @@ import { animate, useMotionValue } from 'motion-v'
 import { MicOff, MonitorUp } from '@lucide/vue'
 import type { Sharing } from '@/call/useCall'
 import StreamVideo from '@/components/video/StreamVideo.vue'
+import MicLevel from './MicLevel.vue'
 import PeerPlaceholder from './PeerPlaceholder.vue'
 import { useSafeArea } from '@/composables/useSafeArea'
 import { cn } from '@/lib/utils'
@@ -20,8 +21,12 @@ const props = defineProps<{
   controlsVisible: boolean
   compact: boolean
   micOn: boolean
+  /** 0..1 from our own microphone */
+  micLevel: number
   cameraOn: boolean
   sharing: Sharing
+  /** Group call: how the others see this device, shown next to "You". */
+  label?: string
 }>()
 
 const emit = defineEmits<{
@@ -232,14 +237,62 @@ defineExpose({ flip })
     >
       <div
         v-if="props.pip"
-        class="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 py-1 pr-2.5 pl-1.5 text-xs font-medium text-white backdrop-blur-md"
-        :class="props.micOn && 'pl-2.5'"
+        :class="cn(
+          'pointer-events-none absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/55 py-1 pr-2.5 pl-1.5 text-xs font-medium text-white backdrop-blur-md',
+          props.micOn ? 'max-w-[calc(100%-3rem)]' : 'max-w-[calc(100%-1rem)]',
+        )"
       >
-        <span v-if="!props.micOn" class="flex size-5 items-center justify-center rounded-full bg-red-500">
-          <MicOff class="size-3" />
+        <!-- Collapsed, the negative margin leaves "You" where the pill's wider left padding would. -->
+        <span
+          :class="cn(
+            'flex h-5 shrink-0 items-center justify-center transition-[width,margin] duration-300 ease-bounce',
+            props.micOn ? '-mr-0.5 w-0' : 'w-5',
+          )"
+        >
+          <span
+            :class="cn(
+              'flex size-5 shrink-0 items-center justify-center rounded-full bg-red-500 transition-[scale,opacity] duration-300 ease-bounce',
+              props.micOn ? 'scale-50 opacity-0' : 'scale-100 opacity-100',
+            )"
+          >
+            <MicOff class="size-3" />
+          </span>
         </span>
-        You
+        <span class="shrink-0">You</span>
+        <span v-if="props.label" class="truncate text-white/65">· {{ props.label }}</span>
       </div>
+    </Transition>
+
+    <!-- Your microphone: in the tile's corner as a picture-in-picture (the pill already marks it
+         muted), on the left edge while the tile is the whole stage. -->
+    <Transition
+      enter-active-class="transition duration-300 ease-bounce"
+      leave-active-class="transition duration-200"
+      enter-from-class="scale-50 opacity-0"
+      leave-to-class="scale-50 opacity-0"
+    >
+      <MicLevel
+        v-if="props.pip && props.micOn"
+        :level="props.micLevel"
+        :muted="false"
+        size="sm"
+        class="pointer-events-none absolute right-2 bottom-2"
+      />
+    </Transition>
+    <Transition
+      enter-active-class="transition duration-500 ease-bounce"
+      leave-active-class="transition duration-200"
+      enter-from-class="scale-50 opacity-0"
+      leave-to-class="scale-50 opacity-0"
+    >
+      <MicLevel
+        v-if="!props.pip"
+        :level="props.micLevel"
+        :muted="!props.micOn"
+        size="lg"
+        class="pointer-events-none absolute top-1/2 -translate-y-1/2"
+        :style="{ left: `${safe.left + (props.compact ? 16 : 24)}px` }"
+      />
     </Transition>
   </div>
 </template>

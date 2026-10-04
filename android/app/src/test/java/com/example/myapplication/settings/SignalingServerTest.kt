@@ -17,8 +17,14 @@ class SignalingServerTest {
     }
 
     @Test
-    fun dropsThePathBecauseSocketIoWouldTreatItAsANamespace() {
+    fun dropsThePath() {
         assertEquals("http://10.0.0.2:4000", SignalingServer.normalize("http://10.0.0.2:4000/socket/"))
+    }
+
+    @Test
+    fun webSocketUrlMapsTheSchemeAndAddsTheEndpointPath() {
+        assertEquals("ws://192.168.1.10:4000/ws", SignalingServer.webSocketUrl("http://192.168.1.10:4000"))
+        assertEquals("wss://signal.example.com/ws", SignalingServer.webSocketUrl("https://signal.example.com"))
     }
 
     @Test

@@ -5,7 +5,7 @@
 
 import Foundation
 
-/// The Socket.IO server calls signal through. It can be changed in the lobby and is remembered on this device.
+/// The signaling server 1:1 calls signal through. It can be changed in the lobby and is remembered on this device.
 enum SignalingServer {
     static let defaultURL = "http://192.168.0.10:4000"
 
@@ -22,8 +22,16 @@ enum SignalingServer {
         }
     }
 
+    /// The WebSocket endpoint, `ws://host:port/ws`, of an address saved by `normalize`.
+    static func webSocketURL(for address: String) -> URL? {
+        guard var components = URLComponents(string: address), components.host != nil else { return nil }
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        components.path = "/ws"
+        return components.url
+    }
+
     /// Turns a typed address into `scheme://host[:port]`, or nil when it is not an http(s) server.
-    /// Any path is dropped because Socket.IO would treat it as a namespace.
+    /// Any path is dropped: the server takes its WebSocket on /ws.
     static func normalize(_ input: String) -> String? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }

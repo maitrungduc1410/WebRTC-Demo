@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import { Eye, EyeOff, Maximize, Minimize, PictureInPicture2, Sparkles, SwitchCamera, Volume2, VolumeOff } from '@lucide/vue'
-import type { Call } from '@/call/useCall'
+import type { CallControls } from '@/call/types'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { cn } from '@/lib/utils'
 
 const open = defineModel<boolean>('open', { required: true })
 
 const props = defineProps<{
-  call: Call
+  call: CallControls
+  /** Group call: remote options apply to everyone, and tiles fit on their own. */
+  group?: boolean
   fit: boolean
   pipSupported: boolean
   pipActive: boolean
@@ -48,7 +50,9 @@ const options = computed<Option[]>(() => {
     {
       id: 'audio',
       icon: call.remoteAudioMuted.value ? VolumeOff : Volume2,
-      label: call.remoteAudioMuted.value ? 'Their audio muted' : 'Mute their audio',
+      label: props.group
+        ? (call.remoteAudioMuted.value ? 'Everyone muted' : 'Mute everyone')
+        : (call.remoteAudioMuted.value ? 'Their audio muted' : 'Mute their audio'),
       checked: call.remoteAudioMuted.value,
       disabled: !connected,
       run: call.toggleRemoteAudio,
@@ -56,20 +60,24 @@ const options = computed<Option[]>(() => {
     {
       id: 'video',
       icon: call.remoteVideoHidden.value ? EyeOff : Eye,
-      label: call.remoteVideoHidden.value ? 'Their video hidden' : 'Hide their video',
+      label: props.group
+        ? (call.remoteVideoHidden.value ? 'All video hidden' : 'Hide all video')
+        : (call.remoteVideoHidden.value ? 'Their video hidden' : 'Hide their video'),
       checked: call.remoteVideoHidden.value,
       disabled: !connected,
       run: call.toggleRemoteVideo,
     },
-    {
+  ]
+  if (!props.group) {
+    list.push({
       id: 'fit',
       icon: props.fit ? Minimize : Maximize,
       label: props.fit ? 'Fit to screen' : 'Fill screen',
       checked: props.fit,
       disabled: !connected,
       run: () => emit('toggleFit'),
-    },
-  ]
+    })
+  }
   if (call.cameraCount.value > 1) {
     list.push({ id: 'camera', icon: SwitchCamera, label: 'Switch camera', checked: false, disabled: sharing, run: () => emit('switchCamera'), closes: true })
   }
@@ -90,7 +98,7 @@ function choose(option: Option) {
     <DrawerContent class="dark">
       <DrawerHeader class="pb-2 text-left short:pt-1">
         <DrawerTitle>Call options</DrawerTitle>
-        <DrawerDescription>Changes to the other person only apply on this device.</DrawerDescription>
+        <DrawerDescription>{{ props.group ? 'Changes to the others' : 'Changes to the other person' }} only apply on this device.</DrawerDescription>
       </DrawerHeader>
       <div class="scrollbar-thin grid min-h-0 grid-cols-2 gap-3 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:grid-cols-3 short:grid-cols-4">
         <button
