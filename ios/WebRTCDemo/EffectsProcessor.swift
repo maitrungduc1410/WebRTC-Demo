@@ -8,7 +8,11 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
 import Metal
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 import Vision
 import WebRTC
 
@@ -59,7 +63,16 @@ final class EffectsProcessor: NSObject, RTCVideoCapturerDelegate {
     private var isProcessing = false
 
     // Run segmentation and face detection on every Nth frame and reuse the results in between.
+    #if os(iOS)
     private let analysisInterval = 2
+    #else
+    // Starts as on iOS and backs off where Vision is slow (Intel Macs have no Neural Engine).
+    // Only touched on processingQueue.
+    private var analysisInterval = 2
+    private var analysisCost: Double?
+    // Requests that have run once; a request's first run loads its model and is not timed.
+    private var warmRequests = Set<ObjectIdentifier>()
+    #endif
     // Shown behind a video background until its first frame is decoded.
     private static let videoFallbackBlur: CGFloat = 0.02
 
@@ -235,12 +248,23 @@ final class EffectsProcessor: NSObject, RTCVideoCapturerDelegate {
         var requests: [VNRequest] = []
         if scene.needsMask { requests.append(segmentationRequest) }
         if scene.needsFace { requests.append(faceRequest) }
+        #if os(macOS)
+        let loadsModel = requests.contains { !warmRequests.contains(ObjectIdentifier($0)) }
+        let started = CACurrentMediaTime()
+        #endif
         do {
             try sequenceHandler.perform(requests, on: image)
         } catch {
             print("effects analysis failed: \(error)")
             return
         }
+        #if os(macOS)
+        if loadsModel {
+            requests.forEach { warmRequests.insert(ObjectIdentifier($0)) }
+        } else {
+            adaptCadence(to: CACurrentMediaTime() - started)
+        }
+        #endif
 
         if scene.needsMask, let maskBuffer = segmentationRequest.results?.first?.pixelBuffer {
             let mask = CIImage(cvPixelBuffer: maskBuffer)
@@ -306,6 +330,15 @@ final class EffectsProcessor: NSObject, RTCVideoCapturerDelegate {
         CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer)
         return buffer
     }
+
+    #if os(macOS)
+    /// Spreads analysis so it averages about 10 ms per frame of the 33 ms budget.
+    private func adaptCadence(to seconds: Double) {
+        let average = analysisCost.map { $0 * 0.9 + seconds * 0.1 } ?? seconds
+        analysisCost = average
+        analysisInterval = average > 0.03 ? 4 : average > 0.02 ? 3 : 2
+    }
+    #endif
 
     private func resetAnalysis() {
         cachedMask = nil

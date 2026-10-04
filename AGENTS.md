@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**WebRTC-Demo** is a comprehensive, cross-platform WebRTC demonstration project that showcases real-time peer-to-peer communication capabilities across Web, Android, and iOS platforms. The project implements modern WebRTC APIs (webrtc-sdk M150 on native) to enable video calls, audio communication, screen sharing, and data channel messaging between multiple clients.
+**WebRTC-Demo** is a comprehensive, cross-platform WebRTC demonstration project that showcases real-time peer-to-peer communication capabilities across Web, Android, iOS and macOS. The project implements modern WebRTC APIs (webrtc-sdk M150 on native) to enable video calls, audio communication, screen sharing, and data channel messaging between multiple clients.
 
 Two call modes:
 - **1:1 peer to peer (default).** Needs only `signaling-server/`. Keep this path zero-setup and its code easy to read: it is the main learning material.
@@ -260,8 +260,11 @@ WebRTCDemoScreenBroadcastSetupUI (Broadcast Setup)
 
 **Configuration:**
 - Server URL is edited in the lobby and saved in `UserDefaults` (`SignalingServer.swift`); `Info.plist` allows plain HTTP
-- Deployment target iOS 26 for every target (Liquid Glass APIs); the pods keep their own minimums
+- Deployment target iOS 26 / macOS 26 for every target (Liquid Glass APIs)
+- The only dependency is WebRTC `150.7871.01`, through the local Swift package `ios/Packages/WebRTC`: the `webrtc-sdk/Specs` binary (same URL and checksum), because that release's own manifest doesn't resolve (`.visionOS(.v26)` with tools 5.9). CocoaPods and Socket.IO are not used
+- The macOS app `WebRTCDemoMac` is a target in the same project; shared files are compiled into both apps, with platform code behind `#if os(macOS)` / `#if os(iOS)`
 - The Xcode project does not use synchronized folders: add new source files to `project.pbxproj` (or through Xcode)
+- The Mac app compiles both engines (`LocalMedia`, `WebRTCClient`, `GroupCallClient`, `SignalingSocket`, `FrameEncryption`); its group call UI is `WebRTCDemoMac/MacGroupStage.swift`. Keep iOS behaviour identical when touching shared files
 
 #### 4. Android Client (`android/`)
 
@@ -355,7 +358,7 @@ The project uses Google's public STUN server:
 
 ### Prerequisites
 - Node.js 20.19+ and npm/yarn
-- iOS: Xcode 26, CocoaPods, a device on iOS 26+
+- iOS / macOS: Xcode 26, a device on iOS 26+ or a Mac on macOS 26+
 - Android: Android Studio, Android SDK (compileSdk 36), JDK 17+
 - Modern web browser with WebRTC support
 
@@ -377,13 +380,9 @@ The project uses Google's public STUN server:
    ```
    Available at `http://localhost:5173`. It connects to port 4000 on the same host; change the address in the lobby if the server runs elsewhere
 
-3. **iOS Setup**
-   ```bash
-   cd ios
-   pod install
-   ```
-   - Open `WebRTCDemo.xcworkspace` in Xcode
-   - Build and run, then set the signaling server address in the lobby
+3. **iOS / macOS Setup**
+   - Open `ios/WebRTCDemo.xcodeproj` in Xcode (Swift packages resolve on first open)
+   - Run the `WebRTCDemo` scheme on an iPhone or `WebRTCDemoMac` on My Mac, then set the signaling server address in the lobby (iOS) or Settings (macOS)
 
 4. **Android Setup**
    - Open project in Android Studio
@@ -487,13 +486,8 @@ Rooms are temporary and in-memory:
 
 ### iOS Issues
 
-**Issue 1: Minimum Deployment Target**
-- **Error**: "Compiling for iOS 11.0, but module..."
-- **Solution**: Update pod's Minimum Deployment to latest iOS version in Xcode project settings
-
-**Issue 2: Sandbox rsync Error**
-- **Error**: `Sandbox: rsync.samba(13105)...`
-- **Solution**: Set `ENABLE_USER_SCRIPT_SANDBOXING` to `No` in Xcode build options
+**Swift packages fail to resolve**
+- **Solution**: File › Packages › Reset Package Caches, then Resolve Package Versions
 
 ### General Issues
 
@@ -555,7 +549,7 @@ Rooms are temporary and in-memory:
 - **Reusability**: Platform-specific wrappers around WebRTC
 - **Error Handling**: Comprehensive error handling for network issues
 - **Logging**: Debug logs for troubleshooting
-- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by all three apps. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see the README); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`) in sync across platforms
+- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by every app. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see the README); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`) in sync across platforms
 
 ### Testing Strategies
 

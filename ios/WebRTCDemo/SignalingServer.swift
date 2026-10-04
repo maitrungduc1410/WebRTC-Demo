@@ -7,9 +7,15 @@ import Foundation
 
 /// The signaling server 1:1 calls signal through. It can be changed in the lobby and is remembered on this device.
 enum SignalingServer {
+    #if os(macOS)
+    // The server usually runs on the same Mac during development.
+    static let defaultURL = "http://localhost:4000"
+    #else
     static let defaultURL = "http://192.168.0.10:4000"
+    #endif
 
-    private static let key = "signalingServer"
+    /// UserDefaults key; only set when the address differs from the default.
+    static let key = "signalingServer"
 
     static var current: String {
         get { UserDefaults.standard.string(forKey: key) ?? defaultURL }

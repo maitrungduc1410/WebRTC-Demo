@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how WebRTC-Demo is put together: the signaling server, the three clients (Web, Android, iOS), how a call is set up, how media sources are switched, and how end-to-end encryption (E2EE) and backgrounds and effects work on every platform.
+This document explains how WebRTC-Demo is put together: the signaling server, the clients (Web, Android, iOS, macOS), how a call is set up, how media sources are switched, and how end-to-end encryption (E2EE) and backgrounds and effects work on every platform.
 
 - [1. Big picture](#1-big-picture)
 - [2. Repository layout](#2-repository-layout)
@@ -9,6 +9,7 @@ This document explains how WebRTC-Demo is put together: the signaling server, th
 - [5. Web client](#5-web-client)
 - [6. Android client](#6-android-client)
 - [7. iOS client](#7-ios-client)
+- [7b. macOS client](#7b-macos-client)
 - [8. Switching media sources](#8-switching-media-sources)
 - [9. End-to-end encryption](#9-end-to-end-encryption)
 - [10. Backgrounds and effects](#10-backgrounds-and-effects)
@@ -25,9 +26,9 @@ Two peers join the same room through a small WebSocket signaling server. The ser
 
 ```mermaid
 flowchart LR
-    A["Peer A<br/>Web / Android / iOS"]
+    A["Peer A<br/>Web / Android / iOS / macOS"]
     S["Signaling server<br/>Node.js + ws<br/>:4000"]
-    B["Peer B<br/>Web / Android / iOS"]
+    B["Peer B<br/>Web / Android / iOS / macOS"]
     STUN["STUN<br/>stun.l.google.com:19302"]
 
     A <-- "control plane (WebSocket, JSON)<br/>rooms, SDP, ICE, E2EE key" --> S
@@ -37,7 +38,7 @@ flowchart LR
     B -. "public address" .-> STUN
 ```
 
-Any client can call any other client (Web ↔ Android ↔ iOS). A room holds at most **2 participants** (1:1 calls).
+Any client can call any other client (Web ↔ Android ↔ iOS ↔ macOS). A room holds at most **2 participants** (1:1 calls).
 
 That is the default mode and needs nothing else. **Group calls** are an optional, advanced mode: run `sfu-server/` (Go + Pion), pick "Group call (SFU)" in the lobby, and several participants (8 by default, set with `-max-participants`) join one room through a Selective Forwarding Unit. The clients still use only standard WebRTC APIs. See [section 12](#12-group-call-sfu-optional).
 
@@ -46,7 +47,8 @@ That is the default mode and needs nothing else. **Group calls** are an optional
 | Signaling server | Node.js, `ws` (plain WebSocket, JSON messages) | `signaling-server/server.js` |
 | Web client | Vue 3, TypeScript, Vite, Tailwind v4, shadcn-vue (reka-ui), Lucide, motion-v, MediaPipe Tasks Vision | `web/src/App.vue`, `web/src/call/useCall.ts` |
 | Android client | Kotlin, Jetpack Compose + Material 3 Expressive, `io.github.webrtc-sdk:android`, MediaPipe Tasks Vision, OkHttp WebSocket | `android/app/src/main/java/com/example/myapplication/MainActivity.kt` |
-| iOS client | Swift, SwiftUI + Liquid Glass (iOS 26), pod `WebRTC-SDK`, Vision, Core Image, `URLSessionWebSocketTask` | `ios/WebRTCDemo/WebRTCDemoApp.swift` |
+| iOS client | Swift, SwiftUI + Liquid Glass (iOS 26), Swift package `WebRTC` (webrtc-sdk/Specs), Vision, Core Image, `URLSessionWebSocketTask` | `ios/WebRTCDemo/WebRTCDemoApp.swift` |
+| macOS client | Swift, SwiftUI + AppKit + Liquid Glass (macOS 26), same package and shared engines, ScreenCaptureKit, AVFoundation | `ios/WebRTCDemoMac/WebRTCDemoMacApp.swift` |
 | iOS broadcast extension | ReplayKit, Unix domain socket | `ios/WebRTCDemoScreenBroadcast/SampleHandler.swift` |
 
 ---
@@ -64,10 +66,11 @@ WebRTC-Demo/
 │   ├── participant.go         Publish + subscribe PeerConnections, RTP forwarding, PLI, renegotiation
 │   ├── webrtc.go              Pion API: VP8 + Opus, interceptors, single UDP port
 │   └── sfu_test.go            Pion clients publishing over loopback
-├── effects/                   Backgrounds and stickers bundled by all three apps
+├── effects/                   Backgrounds and stickers bundled by every app
 │   ├── backgrounds.json, stickers.json
 │   └── backgrounds/, thumbnails/, stickers/
 ├── tools/prepare_effects.py   Turns downloads in effects-source/ into effects/backgrounds
+├── tools/make_app_icons.py    Draws the iOS, macOS and Android app icons from one design
 ├── web/                       Vue 3 single-page client
 │   └── src/
 │       ├── App.vue            Lobby ↔ call transition, theme, toasts
@@ -115,29 +118,45 @@ WebRTC-Demo/
 │   ├── java/org/webrtc/Camera{1,2}Helper.kt  Camera capture formats (package-private webrtc API)
 │   └── assets/                     selfie_segmenter.tflite, face_landmarker.task (effects/ is copied in at build time)
 └── ios/
-    ├── WebRTCDemo/
+    ├── WebRTCDemo.xcodeproj         iOS app, broadcast extensions and Mac app
+    ├── Packages/WebRTC/             Local Swift package: the webrtc-sdk/Specs WebRTC binary
+    ├── WebRTCDemo/                  iOS app; files marked (shared) are also compiled into the Mac app
     │   ├── WebRTCDemoApp.swift          @main SwiftUI app: lobby, call as a full screen cover
-    │   ├── LobbyView.swift              Room id, E2EE toggle, join button
-    │   ├── CallViewModel.swift          @Observable call state + 1:1 signaling messages
-    │   ├── CallView.swift               Call screen: remote stage, local PiP, top bar, overlays
-    │   ├── CallControls.swift           Glass toolbar, share menu, "More" sheet
-    │   ├── ChatView.swift               Chat sheet
-    │   ├── PeerPlaceholderView.swift    Blurred last frame + speaking avatar
-    │   ├── VideoView.swift              RTCMTLVideoView wrapper, FrameSnapshotter
+    │   ├── LobbyView.swift              Room id, E2EE toggle, join button (shared)
+    │   ├── CallViewModel.swift          @Observable call state, owns LocalMedia + the 1:1 or group engine (shared)
+    │   ├── CallView.swift               iOS call screen: remote stage, local PiP, top bar
+    │   ├── CallOverlays.swift           Room pill, status chips, waiting card, recent messages (shared)
+    │   ├── CallControls.swift           Glass buttons (shared), iOS toolbar and "More" sheet
+    │   ├── ChatView.swift               Chat sheet / side panel (shared)
+    │   ├── PeerPlaceholderView.swift    Blurred last frame + speaking avatar (shared)
+    │   ├── VideoView.swift              RTCMTLVideoView wrapper (UIKit and AppKit), FrameSnapshotter (shared)
     │   ├── PictureInPicture.swift       System PiP: AVSampleBufferDisplayLayer renderer
-    │   ├── LocalMedia.swift             Factory, tracks, capturers, effects; shared by both engines
-    │   ├── PeerConnectionClient.swift   class WebRTCClient: the 1:1 engine
-    │   ├── SignalingSocket.swift        JSON over URLSessionWebSocketTask; used by both engines
-    │   ├── GroupCallClient.swift        Group engine: SFU WebSocket, publish + subscribe PeerConnections
-    │   ├── GroupCallView.swift          Group call screen: participant grid
-    │   ├── FrameEncryption.swift        E2EE key provider and frame cryptors; shared by both engines
-    │   ├── EffectsCatalog.swift         Reads the bundled effects folder, saved selection, sticker placement
-    │   ├── EffectsProcessor.swift       Vision + Core Image proxy capturer delegate
+    │   ├── LocalMedia.swift             Factory, tracks, capturers, effects; used by both engines (shared)
+    │   ├── PeerConnectionClient.swift   class WebRTCClient: the 1:1 engine (shared)
+    │   ├── SignalingSocket.swift        JSON over URLSessionWebSocketTask; used by both engines (shared)
+    │   ├── GroupCallClient.swift        Group engine: SFU WebSocket, publish + subscribe PeerConnections (shared)
+    │   ├── SFUServer.swift              SFU address: normalize, save (shared)
+    │   ├── GroupCallView.swift          iOS group call screen: participant grid, people sheet
+    │   ├── FrameEncryption.swift        E2EE key provider and frame cryptors; used by both engines (shared)
+    │   ├── EffectsCatalog.swift         Reads the bundled effects folder, saved selection, sticker placement (shared)
+    │   ├── EffectsProcessor.swift       Vision + Core Image proxy capturer delegate (shared)
     │   ├── EffectsSheet.swift           Backgrounds and filters picker with a live preview
     │   ├── FlutterBroadcastScreenCapturer.*  Screen capturer fed by the broadcast extension
     │   └── FlutterSocketConnection*.*        Unix socket server + frame reader (from flutter-webrtc)
+    ├── WebRTCDemoMac/               macOS app
+    │   ├── WebRTCDemoMacApp.swift       @main: single window, Settings scene, Call menu
+    │   ├── MacCallView.swift            Call window: stage, draggable self view, chrome, auto-hide
+    │   ├── MacCallToolbar.swift         Glass toolbar with device menus and tooltips
+    │   ├── CallCommands.swift           Call menu and single-key shortcuts
+    │   ├── ScreenSharePicker.swift      Display/window picker with thumbnails (ScreenCaptureKit)
+    │   ├── ScreenShareCapturer.swift    SCStream -> RTCVideoSource
+    │   ├── FileVideoCapturer.swift      AVAssetReader -> RTCVideoSource, looping
+    │   ├── FloatingCallWindow.swift     Always-on-top mini call window (the Mac's PiP)
+    │   ├── MacGroupStage.swift          Group call grid, tiles, people list
+    │   ├── MacSettingsView.swift        Signaling and SFU server addresses
+    │   └── MacSupport.swift             Window helpers, device model, idle tracker
     ├── WebRTCDemoScreenBroadcast/       ReplayKit upload extension
-    └── Podfile
+    └── WebRTCDemoScreenBroadcastSetupUI/
 ```
 
 ---
@@ -539,7 +558,7 @@ The broadcast keeps going when the user leaves the app, which needs two things:
 - **The app process stays alive.** `UIBackgroundModes` has `audio` and `voip`, and the call keeps an active `playAndRecord` audio session, so iOS does not suspend the app (and its socket server) in the background.
 - **The video encoder keeps working.** H264 is encoded by the VideoToolbox hardware encoder, which iOS invalidates while the app is in the background; every frame then fails and the remote side sees a frozen picture. So iOS always puts **VP8** (software) first in its codec preferences, with or without E2EE.
 
-The audio session is configured by the app, not left to WebRTC: before every call `CallViewModel.configureCallAudio()` sets `RTCAudioSessionConfiguration.webRTC()` to `playAndRecord` + `voiceChat`. The `WebRTC-SDK` pod (the webrtc-sdk fork) otherwise copies the session's launch category (`soloAmbient`), which iOS rejects together with the Bluetooth HFP option, leaving calls without microphone and playout (README > Troubleshooting). `AudioSessionWatcher` turns audio unit failures, interruptions and a rejected configuration into toasts.
+The audio session is configured by the app, not left to WebRTC: before every call `CallViewModel.configureCallAudio()` sets `RTCAudioSessionConfiguration.webRTC()` to `playAndRecord` + `voiceChat`. The WebRTC Swift package (`webrtc-sdk/Specs`, the webrtc-sdk fork) otherwise copies the session's launch category (`soloAmbient`), which iOS rejects together with the Bluetooth HFP option, leaving calls without microphone and playout (README > Troubleshooting). `AudioSessionWatcher` turns audio unit failures, interruptions and a rejected configuration into toasts.
 
 The remote peer's audio can be muted locally ("Peer audio" in the More sheet): `setRemoteAudioEnabled()` disables the audio track of every receiver, including receivers added later by a renegotiation. Nothing is sent to the remote peer. Android does the same in `WebRtcPeer` with the tracks from `onAddTrack`, and web does it with `track.enabled` on the remote stream.
 
@@ -562,6 +581,20 @@ The target allows portrait and both landscape orientations on iPhone, and every 
 - **Camera.** `RTCCameraVideoCapturer` tags frames with the device orientation.
 
 The signaling server address can be changed in the lobby. `SignalingServer.swift` normalizes it and saves it in `UserDefaults`; `CallViewModel` reads it when a call starts. `Info.plist` allows plain HTTP (`NSAllowsArbitraryLoads`) so any LAN server works, as `usesCleartextTraffic` does on Android.
+
+---
+
+## 7b. macOS client
+
+The Mac app (`ios/WebRTCDemoMac`) is a native SwiftUI app, with AppKit where SwiftUI has no API, built from the same Xcode project as the iOS app. It compiles the iOS client's model, both call engines and the shared views (`CallViewModel`, `LocalMedia`, `WebRTCClient`, `GroupCallClient`, `SignalingSocket`, `FrameEncryption`, `SignalingServer`, `SFUServer`, `LobbyView`, `ChatView`, `CallOverlays`, `PeerPlaceholderView`, `VideoView`, `EffectsCatalog`, `EffectsProcessor`) and keeps platform code apart with `#if os(macOS)` / `#if os(iOS)`. Signaling (the plain WebSocket of [section 3](#3-signaling-server)), the data channel, media state, E2EE (same key provider options), VP8-first codec preferences and group calls ([section 12.10](#1210-macos-client--group-mode)) are therefore identical to iOS.
+
+- **Window.** One `Window` scene with a hidden, transparent title bar; the call screen draws under it and is always dark, the lobby follows the system appearance. The minimum size is 680×500. Settings (⌘,) holds the signaling server and SFU server addresses.
+- **Video.** The macOS slice of webrtc-sdk `150.7871.01` has `RTCMTLVideoView` (an `NSView` without a content mode); `RTCMTLNSVideoView` and `RTCFileVideoCapturer` are declared in its headers but are not in the binary. `VideoHostView` lays the Metal view out at the frame's aspect ratio, just large enough to cover its bounds, and fit/mirror are a layer transform around the center, so fit ↔ fill animates without resizing the drawable (the same idea as `StageVideoView` on iOS).
+- **Camera and devices.** All of it lives in `LocalMedia`'s macOS extension. `RTCCameraVideoCapturer` captures the selected camera at the format closest to 1280×720 (30 fps). Turning the camera off stops capture after the usual 300 ms track disable, so the camera light goes out. Microphones and speakers come from the factory's `RTCAudioDeviceModule`. Choices are remembered.
+- **Media sources.** Camera, screen and file all feed the same `RTCVideoSource`, as on iOS, so switching never renegotiates and the sender's cryptor stays attached. Screen and window sharing use ScreenCaptureKit (`SCShareableContent`, `SCScreenshotManager` thumbnails, `SCStream` in NV12, at most 1920 px on the long side, 30 fps). The last frame is repeated every 500 ms while the screen is static, so the encoder keeps producing frames. webrtc-sdk's `RTCDesktopCapturer` is not used because it captures with `CGDisplayStream` / `CGWindowListCreateImage`, which macOS 15 and later no longer support. A video file is read with `AVAssetReader`, paced by presentation time and looped.
+- **Floating window.** The Mac counterpart of system PiP is an `NSPanel` at floating level that joins all Spaces. It shows the remote video with a mini self view and hover controls, and opens by itself when the call window is minimized. In a group call it shows the active speaker, as the web's picture-in-picture does.
+- **Shortcuts.** The Call menu exposes the same single-letter shortcuts as the web client (`M V C B F P`). As on the web, `F` is off in group calls, where each tile switches on its own; ⇧⌘P opens the people list there. The menu items are disabled while the chat field has focus, so the letters reach the text field.
+- **Sandbox.** App Sandbox with camera, microphone, outgoing and incoming network (ICE connectivity checks arrive unsolicited), and read access to user-selected files; Hardened Runtime is on. `NSAllowsArbitraryLoads` allows the plain-HTTP signaling server, as on iOS.
 
 ---
 
@@ -692,7 +725,7 @@ Effects only process **camera** frames; screen share and file share are sent unt
 
 ### Shared assets
 
-The `effects/` folder at the repository root is the single source for all three apps: Vite imports it with `import.meta.glob`, Android copies it into the APK's `assets/effects` with a generated asset source (`copyEffects` in `app/build.gradle.kts`), and iOS bundles it as a folder reference.
+The `effects/` folder at the repository root is the single source for every app: Vite imports it with `import.meta.glob`, Android copies it into the APK's `assets/effects` with a generated asset source (`copyEffects` in `app/build.gradle.kts`), and iOS and macOS bundle it as a folder reference.
 
 - `backgrounds.json` lists pictures and videos (`id`, `name`, `type`, `file`, `thumbnail`). It is written by `tools/prepare_effects.py` from `effects-source/`. Blur and none are built into each app.
 - `stickers.json` lists stickers. Sizes and offsets are in units of the distance between the eyes, measured from the `anchor` (`eyes`, `nose` or `mouth`), with positive `offsetY` up the face. `height` is optional and stretches the artwork.
@@ -708,7 +741,7 @@ Every platform turns its face landmarks into four points (both eye centers, nose
 
 ### Starting with an effect on
 
-The selection is saved (`localStorage`, `SharedPreferences`, `UserDefaults`). When a call starts with a saved effect, the camera frames are held (web: the first `replaceTrack` waits; Android and iOS: the processor drops camera frames) until the effect is loaded and the first mask is ready, so the peer never sees the real background first. If an effect cannot be loaded, the previous choice comes back with a toast.
+The selection is saved (`localStorage`, `SharedPreferences`, `UserDefaults`). When a call starts with a saved effect, the camera frames are held (web: the first `replaceTrack` waits; Android, iOS and macOS: the processor drops camera frames) until the effect is loaded and the first mask is ready, so the peer never sees the real background first. If an effect cannot be loaded, the previous choice comes back with a toast.
 
 | | Web | Android | iOS |
 |---|---|---|---|
@@ -719,6 +752,8 @@ The selection is saved (`localStorage`, `SharedPreferences`, `UserDefaults`). Wh
 | Compositing | 2D canvas | GLES fragment shader on the camera texture, sticker quad with premultiplied alpha | `CIBlendWithMask`, sticker `composited(over:)`, Metal `CIContext` |
 | Output | `canvas.captureStream(30)` + `replaceTrack` | `TextureBuffer` frame (rotation 0) | `RTCCVPixelBuffer` (BGRA), original rotation |
 | Hook point | separate `MediaStream` | `VideoSource.setVideoProcessor()` | proxy `RTCVideoCapturerDelegate` |
+
+macOS runs the iOS pipeline unchanged, apart from the cadence and mirroring described under macOS pipeline.
 
 ### Android pipeline
 
@@ -751,6 +786,10 @@ flowchart LR
 ```
 
 While a frame is being processed, new camera frames are dropped, so the capture queue never blocks and an unprocessed frame (with the real background) never slips through.
+
+### macOS pipeline
+
+The Mac app compiles the iOS `EffectsCatalog`, `EffectsProcessor` and `EffectsSheet`, so the pipeline above is the same: `RTCCameraVideoCapturer` feeds `EffectsProcessor`, while the ScreenCaptureKit and file capturers feed the `RTCVideoSource` directly and are never processed. Mac cameras deliver landscape frames with rotation 0. The capture connection is pinned to unmirrored, so the peer always gets unmirrored frames (stickers the right way round); only the local views mirror. Vision runs on every 2nd frame as on iOS, and the Mac backs off to every 3rd or 4th frame when a pass averages over 20 or 30 ms (Intel Macs have no Neural Engine); the first run of each request, which loads its model, is not timed.
 
 ### Web pipeline
 
@@ -1097,6 +1136,18 @@ sequenceDiagram
 - **Ending.** A fatal `error` or a closed socket shows "Call ended" with the reason and returns to the lobby. Hanging up sends `leave` and closes the socket.
 - **Not in group mode:** system picture-in-picture (1:1 only), the blurred last-frame snapshot behind the avatar.
 
+### 12.10 macOS client — group mode
+
+The Mac app compiles the iOS engine unchanged (`GroupCallClient`, `LocalMedia`, `FrameEncryption`, `SignalingSocket`, `SFUServer`) and joins as `Mac`, so the protocol, track mapping, threading and ending rules are the ones of [12.9](#129-ios-client--group-mode). Only the UI is its own, in `ios/WebRTCDemoMac/MacGroupStage.swift` and `MacCallView.swift`:
+
+- **Lobby and settings.** The shared lobby has the **Group call (SFU)** switch; on the Mac both server addresses open Settings (⌘,), which edits the signaling and SFU addresses with the same normalization as iOS. The SFU default is `http://localhost:4001`, next to the signaling default `http://localhost:4000`.
+- **Grid.** `MacGroupGrid` lays the remote tiles out between the top bar and the toolbar, with the column count that gives the largest roughly 4:3 tiles (the web's rule) and a short last row centred. The controls stay visible in group mode, as on the web.
+- **Tiles.** `MacGroupTile` fills by default and fits while that participant presents. Double-clicking (or the tile's context menu) switches fit and fill, animated by `StageVideoView`, until they start or stop presenting. Labels `name · short id` start with one animated status mark (red mic-off, presenting, or a green dot while live, as on the web); a green ring marks the active speaker, and the gradient avatar (seed `peer-<id>`) when there is no video, the camera is off or video is hidden locally.
+- **People and own label.** A people chip next to the room pill opens `MacPeopleList` in a popover: you first and highlighted, then everyone with mic, camera and presenting icons. The local tile shows `You · Mac · <short id>`.
+- **Controls.** More › *Only on this Mac* has Mute Everyone and Hide Everyone's Video, which also apply to people who join later. Chat (side panel, sender names), E2EE, device pickers, ScreenCaptureKit and file sharing, and backgrounds and effects work as in a 1:1 call, since they all feed `LocalMedia`.
+- **Floating window.** `P` or minimizing opens the floating panel with the featured participant: the active speaker, else the first camera, else the first person.
+- **Ending.** A fatal `error` or a closed socket shows "Call ended" with the reason and returns to the lobby, as in 1:1 calls.
+
 ---
 
 ## 13. Versions and build
@@ -1104,12 +1155,12 @@ sequenceDiagram
 | Component | Version | Notes |
 |---|---|---|
 | webrtc-sdk Android | `io.github.webrtc-sdk:android:150.7871.01` | `android/app/build.gradle.kts` |
-| webrtc-sdk iOS | pod `WebRTC-SDK` `150.7871.01` | `ios/Podfile`; run `pod install --repo-update` after upgrading |
+| webrtc-sdk iOS / macOS | `webrtc-sdk/Specs` `150.7871.01` binary (`WebRTC.xcframework.zip`, checksum pinned), product `WebRTC`, through a local package because the Specs manifest for that release doesn't resolve | `ios/Packages/WebRTC/Package.swift` |
 | MediaPipe Android | `com.google.mediapipe:tasks-vision:1.0.0` | models in `android/app/src/main/assets/` (`selfie_segmenter.tflite`, `face_landmarker.task`, stored uncompressed) |
 | MediaPipe Web | `@mediapipe/tasks-vision` | models loaded from `storage.googleapis.com` |
 | Jetpack Compose | BOM `2026.06.01`, `material3` `1.5.0-alpha18` | Material 3 Expressive is only in the 1.5 alphas. Newer Compose BOMs need AGP 9.1 and compileSdk 37 |
 | Android Gradle Plugin | `8.13.2`, Gradle `9.5.1`, Kotlin `2.3.0` | compileSdk 36, minSdk 24 |
-| iOS deployment target | 26.0 | Liquid Glass needs iOS 26; build with Xcode 26 |
+| iOS / macOS deployment target | 26.0 | Liquid Glass needs the 26 releases; build with Xcode 26 |
 | sfu-server | Go 1.24, `github.com/pion/webrtc/v4` `v4.2.22`, `github.com/gorilla/websocket` `v1.5.3` | `sfu-server/go.mod`; an older Go downloads 1.24 by itself (`GOTOOLCHAIN=auto`) |
 
 ```text
@@ -1118,7 +1169,7 @@ sfu-server:        go run .   (optional, group calls)          (TCP + UDP 4001)
                    go test -race ./...
 web:               npm install && npm run dev                 (http://localhost:5173)
 android:           ./gradlew :app:assembleDebug
-ios:               cd ios && pod install --repo-update, then open WebRTCDemo.xcworkspace
+ios / macOS:       open ios/WebRTCDemo.xcodeproj; scheme WebRTCDemo (iPhone) or WebRTCDemoMac (My Mac)
 ```
 
 ---
@@ -1133,4 +1184,5 @@ ios:               cd ios && pod install --repo-update, then open WebRTCDemo.xcw
 - **Signaling is not secured.** Plain HTTP/WebSocket, no authentication; anyone with the room id can join.
 - **E2EE key goes through the signaling server in plain form.** Fine for a demo; a real app should use a key agreement (e.g. ECDH) or a passphrase shared out of band.
 - **E2EE is chosen in the lobby** and cannot be toggled during a call; both peers must choose the same setting.
+- **macOS screen sharing needs Screen Recording permission**, granted once in System Settings › Privacy & Security; the app has to be relaunched after granting it.
 - **iOS always sends VP8.** It is encoded in software, so it uses more CPU and battery than hardware H264; this is what keeps screen sharing alive in the background.

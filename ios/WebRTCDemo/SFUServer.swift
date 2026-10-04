@@ -16,7 +16,8 @@ enum SFUServer {
         return components.string!
     }()
 
-    private static let key = "sfuServer"
+    /// UserDefaults key; only set when the address differs from the default.
+    static let key = "sfuServer"
 
     static var current: String {
         get { UserDefaults.standard.string(forKey: key) ?? defaultURL }

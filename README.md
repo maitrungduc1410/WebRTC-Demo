@@ -1,7 +1,7 @@
 # WebRTC-Demo
 
 <div align="center">
-<h3>A comprehensive 1:1 WebRTC demo on Web, Android and iOS</h3>
+<h3>A comprehensive 1:1 WebRTC demo on Web, Android, iOS and macOS</h3>
 <p>Video calls, chat, screen and file sharing, backgrounds and face filters, and end-to-end encryption, with native UIs built in Jetpack Compose (Material 3 Expressive) and SwiftUI (Liquid Glass).</p>
 </div>
 
@@ -40,22 +40,24 @@ _Recording: `images/demo-ui.gif`, joining a room, dragging the picture-in-pictur
 
 # Features
 
-| Feature                                                    | Web | iOS | Android |
-|------------------------------------------------------------|-----|-----|---------|
-| 1:1 video call, peer to peer                               | ✅   | ✅   | ✅       |
-| Group call through your own SFU (optional)                 | ✅   | ✅   | ✅       |
-| Chat over a data channel                                   | ✅   | ✅   | ✅       |
-| Share your screen or a video file                          | ✅   | ✅   | ✅       |
-| Virtual backgrounds: blur, pictures and videos             | ✅   | ✅   | ✅       |
-| Face-tracked stickers                                      | ✅   | ✅   | ✅       |
-| End-to-end encryption, 1:1 and group                       | ✅   | ✅   | ✅       |
-| Picture-in-picture (the call in a floating window)         | ✅   | ✅¹  | ✅       |
+| Feature                                                    | Web | iOS | Android | macOS |
+|------------------------------------------------------------|-----|-----|---------|-------|
+| 1:1 video call, peer to peer                               | ✅   | ✅   | ✅       | ✅     |
+| Group call through your own SFU (optional)                 | ✅   | ✅   | ✅       | ✅     |
+| Chat over a data channel                                   | ✅   | ✅   | ✅       | ✅     |
+| Share your screen or a video file                          | ✅   | ✅   | ✅       | ✅     |
+| Virtual backgrounds: blur, pictures and videos             | ✅   | ✅   | ✅       | ✅     |
+| Face-tracked stickers                                      | ✅   | ✅   | ✅       | ✅     |
+| End-to-end encryption, 1:1 and group                       | ✅   | ✅   | ✅       | ✅     |
+| Your own microphone level on your video (three bars)       | ✅   | ✅   | ✅       | ✅     |
+| Picture-in-picture (the call in a floating window)         | ✅   | ✅¹  | ✅       | ✅²    |
 
 ¹ On iOS, picture-in-picture is available in 1:1 calls only.
+² An always-on-top floating window on the Mac.
 
-Native clients use [webrtc-sdk](https://github.com/webrtc-sdk) `150.7871.01` (Android `io.github.webrtc-sdk:android`, iOS pod `WebRTC-SDK`).
+Native clients use [webrtc-sdk](https://github.com/webrtc-sdk) `150.7871.01` (Android `io.github.webrtc-sdk:android`, iOS and macOS the [`webrtc-sdk/Specs`](https://github.com/webrtc-sdk/Specs) binary through the local Swift package `ios/Packages/WebRTC`).
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the three clients work, with diagrams.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the clients work, with diagrams.
 
 ## Tech stack
 
@@ -66,6 +68,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the thre
 | Web              | Vue 3, Vite, Tailwind CSS, shadcn-vue, Lucide, Motion, MediaPipe |
 | Android          | Kotlin, Jetpack Compose, Material 3 Expressive, MediaPipe |
 | iOS              | Swift, SwiftUI, Liquid Glass, Vision, Core Image |
+| macOS            | Swift, SwiftUI + AppKit, Liquid Glass, ScreenCaptureKit, Vision, Core Image (same Xcode project as iOS) |
 
 # Disclaimer
 This is intended to show common use cases of WebRTC cross platforms and to give you some ideas, it may have bugs, use with caution!
@@ -76,7 +79,7 @@ This is intended to show common use cases of WebRTC cross platforms and to give 
 
 - Node.js 20.19+ for the signaling server and the web client (Vite 7 needs it)
 - Android: Android Studio with JDK 17+, a device on Android 7.0 (API 24) or newer
-- iOS: Xcode 26 and CocoaPods, a device on **iOS 26** or newer (Liquid Glass needs iOS 26)
+- iOS / macOS: Xcode 26. iOS needs a device on **iOS 26** or newer, the Mac app needs **macOS 26** or newer (Liquid Glass needs the 26 releases). Dependencies come from Swift Package Manager; CocoaPods is no longer used
 
 ## Start signaling server
 First you need to start the signaling server, Open terminal at `signaling-server` and run:
@@ -110,12 +113,11 @@ Run the `app` configuration from Android Studio. In the lobby, tap the signaling
 
 ### iOS
 
-First run the following command in the `ios` folder:
-```
-pod install
-```
+Open `ios/WebRTCDemo.xcodeproj` (there is no workspace and no `pod install` any more). Xcode resolves the Swift package (WebRTC `150.7871.01`, `ios/Packages/WebRTC`) on first open. Pick the `WebRTCDemo` scheme and run on a device (the camera and screen sharing need real hardware). In the lobby, tap the signaling server address at the bottom and enter the address printed when you start the signaling server. The app remembers it. The default is `SignalingServer.defaultURL` in `ios/WebRTCDemo/SignalingServer.swift`.
 
-Then open `WebRTCDemo.xcworkspace` and run on a device (the camera and screen sharing need real hardware). In the lobby, tap the signaling server address at the bottom and enter the address printed when you start the signaling server. The app remembers it. The default is `SignalingServer.defaultURL` in `WebRTCDemo/SignalingServer.swift`.
+### macOS
+
+Open `ios/WebRTCDemo.xcodeproj`, pick the `WebRTCDemoMac` scheme and the `My Mac` destination, and run. It is a native SwiftUI/AppKit app (not Catalyst) that shares the call logic with the iOS app. The signaling and SFU server addresses are in **WebRTC Demo › Settings…** (⌘,); the defaults are `http://localhost:4000` and `http://localhost:4001`, so servers started on the same Mac work without changes. The first call asks for camera and microphone access; the first screen share asks for Screen Recording access in System Settings.
 
 ## Group calls (optional)
 
@@ -151,25 +153,33 @@ The web call screen follows the same layout in desktop and phone browsers, with 
 - On screens 1024 px and wider, chat opens as a side panel; on smaller screens it opens as a bottom sheet. On phones, "More" opens a sheet with the remaining options.
 - The picture-in-picture button opens the call in a floating window that stays on top of other tabs and apps. In Chrome and Edge it is a full mini call window (remote video, your video, mic, camera and hang-up buttons), and since Chrome 134 it opens by itself when you switch to another tab during a call. Other browsers float the remote video only.
 
+The macOS call window follows the web desktop layout:
+
+- The video fills the window under the title bar. Move the pointer to show the controls; they hide after about four seconds without movement.
+- Toolbar buttons have tooltips with the same keyboard shortcuts as the web client: `M` microphone, `V` camera, `C` chat, `B` backgrounds and effects, `F` fit/fill, `P` floating window. In a group call, as on the web, `F` is off (double-click a tile instead), the controls stay visible, and the floating window shows whoever is speaking. On the Mac they are also in the **Call** menu (plus ⇧⌘S share, ⌘O share a video file, ⇧⌘E leave) and are off while you type in the chat.
+- Microphone, speaker and camera are chosen from the menus next to the microphone and camera buttons. Share opens a picker with live thumbnails of your screens and windows.
+- In wide windows chat opens as a side panel. Drag your self view to any corner; double-click the remote video to switch between fit and fill.
+- The floating window keeps the call on top of other apps with mute, camera, return and hang-up controls (an always-on-top panel). It also opens when you minimize the call window.
+
 ## Group call screen
 
 In a group call every client shows the other participants in a grid, with the same controls as a 1:1 call:
 
 - Each tile is labelled with the participant's platform and a short id (for example `Android · 3f2a1c`), shows a mic-off icon when their microphone is off, and the avatar placeholder when their camera is off.
 - A green ring marks who is speaking, from the received audio level.
-- Tap the people count next to the timer to see everyone in the room, with your own label first and highlighted, so you can find your tile on the other devices. On web it opens a dialog, and your label is also shown next to "You" on your own tile.
-- People who share their screen are shown fit (whole frame); everyone else fills the tile. Double-tap a tile to switch.
+- Tap the people count next to the timer to see everyone in the room, with your own label first and highlighted, so you can find your tile on the other devices. On web it opens a dialog, and your label is also shown next to "You" on your own tile, as on macOS.
+- People who share their screen are shown fit (whole frame); everyone else fills the tile. Double-tap a tile to switch (double-click on web and macOS).
 - Your own video stays the draggable picture-in-picture tile. While you are alone, the room id card is shown.
 - Chat goes through the SFU server and shows who sent each message. In More, muting peer audio or hiding peer video applies to everyone.
 - On web and iOS, group tiles show the avatar without the blurred last frame (Android keeps it). On iOS, the system picture-in-picture window is only available in 1:1 calls.
 
 # Troubleshooting
 
-## iOS - The iOS deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 13.0, but the range of supported deployment target versions is 15.0 to 27.0.x
+## iOS / macOS - Swift packages fail to resolve
 
-The `WebRTC-SDK` pod declares an older deployment target than recent Xcode versions support. In Xcode, open the **Pods** project, select the **WebRTC-SDK** target, and set **Build Settings > Deployment > iOS Deployment Target** to iOS 17 or newer. Running `pod install` again resets it.
+In Xcode use **File › Packages › Reset Package Caches**, then **Resolve Package Versions**.
 
-<img src="images/ios_issue_deployment_target.png" width="500" />
+WebRTC comes from the local package `ios/Packages/WebRTC`, not straight from [`webrtc-sdk/Specs`](https://github.com/webrtc-sdk/Specs). The Specs manifest for `150.7871.01` declares `swift-tools-version:5.9` but uses `.visionOS(.v26)`, which only exists from PackageDescription 6.2, so Xcode fails with "'v26' is unavailable" and "Missing package product 'WebRTC'". The local package downloads the same `WebRTC.xcframework.zip` with the same checksum. To upgrade WebRTC, change the URL and checksum in `ios/Packages/WebRTC/Package.swift` (the checksum is the `sha256` of the zip), or switch back to the Specs package once a release has a valid manifest.
 
 ## iOS - No audio in calls, video works
 
@@ -181,12 +191,12 @@ Failed to configure audio session.
 InitRecording: InitPlayOrRecord failed for InitRecording!
 ```
 
-The cause is the `WebRTC-SDK` pod, which is the [webrtc-sdk](https://github.com/webrtc-sdk/webrtc) fork, not upstream WebRTC. When the audio device starts, WebRTC applies `RTCAudioSessionConfiguration.webRTC()` to the audio session:
+The cause is the WebRTC Swift package (`webrtc-sdk/Specs`), which is the [webrtc-sdk](https://github.com/webrtc-sdk/webrtc) fork, not upstream WebRTC. When the audio device starts, WebRTC applies `RTCAudioSessionConfiguration.webRTC()` to the audio session:
 
 - Upstream WebRTC defaults it to category `playAndRecord`, mode `voiceChat`.
 - The fork copies the session's *current* category and mode instead (at least since M125). At launch that is `soloAmbient` / `default`, a playback-only category, so the microphone never opens. Since M150 the fork also adds the `allowBluetoothHFP` option, which is only valid with recording categories, so iOS rejects the whole configuration with `-50`, the session stays `soloAmbient`, and WebRTC tears the audio unit down: no recording and no playout.
 
-The fork expects the app to configure the session itself, so `CallViewModel.configureCallAudio()` sets the WebRTC configuration to `playAndRecord` + `voiceChat` + `allowBluetoothHFP` before every call. Keep it when upgrading the pod. If the configuration is ever rejected again, the call shows the toast "Call audio didn't start: iOS refused the audio settings".
+The fork expects the app to configure the session itself, so `CallViewModel.configureCallAudio()` sets the WebRTC configuration to `playAndRecord` + `voiceChat` + `allowBluetoothHFP` before every call. Keep it when upgrading the package. The Mac app has no audio session, so this applies to iOS only. If the configuration is ever rejected again, the call shows the toast "Call audio didn't start: iOS refused the audio settings".
 
 ## Android - Compose or Material 3 dependency needs a newer compileSdk or AGP
 
@@ -250,9 +260,13 @@ Effects only apply to the camera, not to screen share or file share.
 | Compositing | canvas 2D | GLES shaders on the camera texture | Core Image on a Metal `CIContext` |
 | Video backgrounds | hidden `<video>` | `MediaPlayer` into an OES texture | `AVPlayer` + `AVPlayerItemVideoOutput` |
 
+The macOS app compiles the iOS effects code (Vision + Core Image), so it offers the same backgrounds and stickers.
+
+On the Mac the picker is a side panel in place of the chat (420 pt wide, like the web sheet), opened from its toolbar button, the menu (Call ▸ Backgrounds and Effects…) or `B`, and closed with Esc, its close button or the toolbar button. As on the web, `B` only opens it, `C` shows or hides the chat, and `F` and `P` work once the other person has joined. Item names show as tooltips, and the panel closes and is unavailable while you present.
+
 ### Adding backgrounds
 
-All three apps bundle the [`effects`](effects) folder at the repository root, so a background added there shows up everywhere.
+All the apps bundle the [`effects`](effects) folder at the repository root, so a background added there shows up everywhere.
 
 1. Put the original pictures (`.jpg` `.jpeg` `.png` `.webp`) and videos (`.mp4` `.mov` `.webm` `.mkv`) in `effects-source/` at the repository root (ignored by git). Name them in kebab-case after what they show, e.g. `cozy-living-room.jpg`, `beach-sunset.mp4`. The name becomes the id, and the title shown in the app ("Cozy living room").
 2. Run `python3 tools/prepare_effects.py` (needs `ffmpeg` and `ffprobe`). Pictures are resized to 1920 px on the long side; videos to 1280 px, at most 15 s, 30 fps, H.264 without audio. Each gets a 320×180 thumbnail, and `effects/backgrounds.json` is rewritten. Use `--force` to encode everything again.
@@ -265,3 +279,13 @@ Stickers are listed in `effects/stickers.json`. Sizes and offsets are measured i
 - Stickers are based on [Noto Emoji](https://github.com/googlefonts/noto-emoji) (Apache License 2.0, see [`effects/stickers/LICENSE`](effects/stickers/LICENSE)). The headphones were reshaped and recoloured.
 - Background pictures and videos come from [Pexels](https://www.pexels.com) and [Pixabay](https://pixabay.com/), under the [Pexels license](https://www.pexels.com/license/) and the [Pixabay Content License](https://pixabay.com/service/license-summary/).
 - The MediaPipe models (`selfie_segmenter`, `face_landmarker`) are bundled with the Android app and loaded from MediaPipe's model storage on the web; see their model cards for terms.
+
+## App icon
+
+The iOS, macOS and Android apps share one icon, drawn by [`tools/make_app_icons.py`](tools/make_app_icons.py): an indigo-to-violet plate, a frosted glass disc and a white camera. Run `python3 tools/make_app_icons.py` (needs `pip install pillow numpy`) after changing its colors or shapes; it rewrites:
+
+- iOS: `AppIcon` with light, dark and tinted variants.
+- macOS: `MacAppIcon`, 16 to 1024 px on Apple's grid with a drop shadow.
+- Android: an adaptive icon (vector background and foreground, plus a monochrome layer for themed icons), WebP launchers for Android 7, and the 512 px Play Store image.
+
+At 32 px and below the glass disc is dropped and the camera is drawn larger, so it stays readable.

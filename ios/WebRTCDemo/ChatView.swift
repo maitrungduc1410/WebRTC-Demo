@@ -8,6 +8,10 @@ import SwiftUI
 /// In-call chat: over the WebRTC data channel in a 1:1 call, over the SFU WebSocket in a group call.
 struct ChatView: View {
     let model: CallViewModel
+    /// Shows a close button, for the side panel on the Mac.
+    var onClose: (() -> Void)? = nil
+    /// Reports when the message field gains or loses focus, so single-key shortcuts can step aside.
+    var onInputFocusChange: ((Bool) -> Void)? = nil
 
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
@@ -40,10 +44,13 @@ struct ChatView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: model.messages)
             }
             .defaultScrollAnchor(.bottom)
+            #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
+            #endif
 
             inputBar
         }
+        .onChange(of: inputFocused) { onInputFocusChange?(inputFocused) }
     }
 
     private var header: some View {
@@ -70,6 +77,21 @@ struct ChatView: View {
             .font(.footnote.weight(.medium))
             .contentTransition(.opacity)
             .animation(.default, value: model.chat)
+
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.footnote.weight(.bold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .accessibilityLabel("Close chat")
+                #if os(macOS)
+                .help("Close chat (Esc)")
+                #endif
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
@@ -82,6 +104,9 @@ struct ChatView: View {
             HStack(spacing: 8) {
                 TextField(model.chat == .open ? "Message" : "Chat isn't connected yet", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
+                    #if os(macOS)
+                    .textFieldStyle(.plain)
+                    #endif
                     .focused($inputFocused)
                     .submitLabel(.send)
                     .onSubmit(send)

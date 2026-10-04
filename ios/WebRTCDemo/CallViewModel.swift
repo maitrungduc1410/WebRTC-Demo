@@ -5,7 +5,12 @@
 
 import AVFoundation
 import Observation
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+import CoreAudio
+#endif
 import WebRTC
 
 enum ConnectionPhase {
@@ -85,11 +90,27 @@ final class CallViewModel {
     private(set) var unread = 0
     private(set) var localTrack: RTCVideoTrack?
     private(set) var remoteTrack: RTCVideoTrack?
-    private(set) var remoteSnapshot: UIImage?
+    private(set) var remoteSnapshot: PlatformImage?
     private(set) var remoteAudioLevel: Double = 0
     /// 0...1 from our own microphone, for the bars on the local tile; 0 while muted.
     private(set) var micLevel: Double = 0
     var toast: Toast?
+
+    #if os(macOS)
+    private(set) var cameras: [MediaDevice] = []
+    private(set) var cameraID: String?
+    private(set) var microphones: [MediaDevice] = []
+    private(set) var microphoneID: String?
+    private(set) var speakers: [MediaDevice] = []
+    private(set) var speakerID: String?
+    /// What is being shared, for the local tile ("Sharing Safari").
+    private(set) var sharingTitle: String?
+    @ObservationIgnored private var displaySleepActivity: NSObjectProtocol?
+    @ObservationIgnored private var deviceObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var audioDeviceObserver: AudioDeviceListObserver?
+    /// Whether the microphone / speaker has run in this call; only those are reopened after losing their device.
+    @ObservationIgnored private var audioRan = (input: false, output: false)
+    #endif
 
     // Group call only
     private(set) var participants: [GroupParticipant] = []
@@ -105,7 +126,11 @@ final class CallViewModel {
     var remoteVideoPaused: Bool { remoteVideoHidden || !remote.video }
 
     /// Sent with `join`; the others see this device as "name · short id".
+    #if os(iOS)
     static let groupClientName = "iOS"
+    #else
+    static let groupClientName = "Mac"
+    #endif
 
     /// This device as the others see it in a group call; nil until joined.
     var selfParticipant: GroupParticipant? {
@@ -134,7 +159,9 @@ final class CallViewModel {
     @ObservationIgnored private var audioLevelTimer: Timer?
     @ObservationIgnored private var appliedEffects = EffectsSelection()
     @ObservationIgnored private var effectsTask: Task<Void, Never>?
+    #if os(iOS)
     @ObservationIgnored private let audioWatcher = AudioSessionWatcher()
+    #endif
     @ObservationIgnored private let idleMicMeter = IdleMicMeter()
     @ObservationIgnored private var micLevelTimer: Timer?
 
@@ -170,6 +197,7 @@ final class CallViewModel {
     func start() {
         guard !started else { return }
         started = true
+        #if os(iOS)
         UIApplication.shared.isIdleTimerDisabled = true
         audioWatcher.onProblem = { [weak self] message in
             self?.show(message, systemImage: "speaker.slash.fill")
@@ -181,17 +209,41 @@ final class CallViewModel {
         } else {
             startSignaling()
         }
+        #else
+        displaySleepActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleDisplaySleepDisabled],
+            reason: "Video call"
+        )
+        observeDevices()
+        // The camera must be authorized before local media starts capturing.
+        Self.requestMediaAccess { [weak self] camera, microphone in
+            guard let self, self.started else { return }
+            if !camera || !microphone {
+                let missing = !camera && !microphone ? "Camera and microphone" : (camera ? "Microphone" : "Camera")
+                self.show("\(missing) access is off in System Settings › Privacy & Security", systemImage: "exclamationmark.triangle.fill")
+            }
+            if self.isGroup {
+                self.startGroup()
+            } else {
+                self.startSignaling()
+            }
+        }
+        #endif
 
         audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.pollRemoteAudioLevel()
+            #if os(macOS)
+            self?.noteAudioActivity()
+            #endif
         }
         micLevelTimer = Timer.scheduledTimer(withTimeInterval: Self.micLevelInterval, repeats: true) { [weak self] _ in
             self?.pollMicLevel()
         }
     }
 
+    #if os(iOS)
     /// Upstream WebRTC defaults to play-and-record in voice chat mode; the webrtc-sdk fork (the
-    /// `WebRTC-SDK` pod) copies the session's current category and mode instead, solo ambient at
+    /// WebRTC Swift package) copies the session's current category and mode instead, solo ambient at
     /// launch, and since M150 adds the Bluetooth HFP option. iOS rejects that pair (OSStatus -50), so
     /// the audio unit never starts: no microphone and no playout. See README > Troubleshooting.
     private static func configureCallAudio() {
@@ -201,27 +253,44 @@ final class CallViewModel {
         config.categoryOptions = [.allowBluetoothHFP]
         RTCAudioSessionConfiguration.setWebRTC(config)
     }
+    #endif
 
     func stop() {
         guard started else { return }
         started = false
+        #if os(iOS)
         UIApplication.shared.isIdleTimerDisabled = false
+        #else
+        if let displaySleepActivity {
+            ProcessInfo.processInfo.endActivity(displaySleepActivity)
+            self.displaySleepActivity = nil
+        }
+        deviceObservers.forEach(NotificationCenter.default.removeObserver)
+        deviceObservers = []
+        audioDeviceObserver = nil
+        audioRan = (false, false)
+        sharingTitle = nil
+        #endif
         audioLevelTimer?.invalidate()
         audioLevelTimer = nil
         micLevelTimer?.invalidate()
         micLevelTimer = nil
         idleMicMeter.release()
         micLevel = 0
+        #if os(iOS)
         audioWatcher.stop()
+        #endif
         mediaStateWork?.cancel()
         effectsTask?.cancel()
 
+        #if os(iOS)
         if sharing == .screen {
             media?.stopScreenCapture()
         }
         if speakerOn {
             try? AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
         }
+        #endif
         remoteTrack?.remove(snapshotter)
         signaling?.close()
         signaling = nil
@@ -252,6 +321,9 @@ final class CallViewModel {
         mediaStateWork?.cancel()
         let work: DispatchWorkItem
         if on {
+            #if os(macOS)
+            media?.setCameraEnabled(true)
+            #endif
             media?.toggleVideo(enable: true)
             work = DispatchWorkItem { [weak self] in self?.sendMediaState() }
         } else {
@@ -259,12 +331,17 @@ final class CallViewModel {
             work = DispatchWorkItem { [weak self] in
                 guard let self, !self.cameraOn else { return }
                 self.media?.toggleVideo(enable: false)
+                #if os(macOS)
+                // Unlike iOS, the Mac turns the camera (and its light) off, as the web client does.
+                self.media?.setCameraEnabled(false)
+                #endif
             }
         }
         mediaStateWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.mediaStateDelay, execute: work)
     }
 
+    #if os(iOS)
     /// `completion` runs on the main queue once the other camera is capturing. It may never run if
     /// the switch is refused (one is already in progress), so callers must not wait forever.
     func switchCamera(completion: (() -> Void)? = nil) {
@@ -287,6 +364,7 @@ final class CallViewModel {
             print("Failed to toggle speaker: \(error)")
         }
     }
+    #endif
 
     /// Only mutes local playout; the remote peer is not notified.
     func toggleRemoteAudio() {
@@ -344,6 +422,7 @@ final class CallViewModel {
         }
     }
 
+    #if os(iOS)
     func shareScreen() {
         guard let media, sharing != .screen else { return }
         if sharing == .file {
@@ -368,6 +447,37 @@ final class CallViewModel {
         sendMediaState()
         show("Sharing video file", systemImage: "film")
     }
+    #else
+    /// Picking another screen or window while sharing switches to it.
+    func shareScreen(_ source: ScreenShareSource) {
+        guard let media else { return }
+        // Local media stops the camera or file first, so the camera does not come on in between.
+        media.startScreenCapture(source: source)
+        broadcastActive = false
+        sharing = .screen
+        sharingTitle = source.title
+        // A disabled track would send black frames instead of the screen
+        if !cameraOn { setCameraOn(true) }
+        sendMediaState()
+        show("Sharing \(source.title)", systemImage: source.kind == .display ? "display" : "macwindow")
+    }
+
+    func shareVideoFile(url: URL) {
+        guard let media else { return }
+        media.shareVideoFile(fileURL: url) { [weak self] error in
+            guard let self, self.sharing == .file else { return }
+            print("Failed to share video file: \(error)")
+            self.stopSharing()
+            self.show("Couldn't play that video", systemImage: "exclamationmark.triangle.fill")
+        }
+        broadcastActive = false
+        sharing = .file
+        sharingTitle = url.deletingPathExtension().lastPathComponent
+        if !cameraOn { setCameraOn(true) }
+        sendMediaState()
+        show("Sharing \(url.lastPathComponent)", systemImage: "film")
+    }
+    #endif
 
     func stopSharing() {
         switch sharing {
@@ -382,8 +492,187 @@ final class CallViewModel {
             show("Stopped video sharing", systemImage: "film")
         }
         sharing = .none
+        #if os(macOS)
+        sharingTitle = nil
+        #endif
         sendMediaState()
     }
+
+    #if os(macOS)
+    // MARK: - Devices (macOS)
+
+    private static let cameraPreferenceKey = "preferredCamera"
+    private static let microphonePreferenceKey = "preferredMicrophone"
+    private static let speakerPreferenceKey = "preferredSpeaker"
+
+    func selectCamera(_ id: String) {
+        UserDefaults.standard.set(id, forKey: Self.cameraPreferenceKey)
+        media?.selectCamera(uniqueID: id)
+        cameraID = id
+    }
+
+    func selectMicrophone(_ id: String) {
+        guard let media, let device = microphones.first(where: { $0.id == id }) else { return }
+        if media.selectAudioDevice(id: id, input: true) {
+            UserDefaults.standard.set(id, forKey: Self.microphonePreferenceKey)
+            microphoneID = id
+        } else {
+            show("Couldn't switch to \(Self.displayName(device))", systemImage: "mic.badge.xmark")
+        }
+    }
+
+    func selectSpeaker(_ id: String) {
+        guard let media, let device = speakers.first(where: { $0.id == id }) else { return }
+        if media.selectAudioDevice(id: id, input: false) {
+            UserDefaults.standard.set(id, forKey: Self.speakerPreferenceKey)
+            speakerID = id
+        } else {
+            show("Couldn't switch to \(Self.displayName(device))", systemImage: "speaker.badge.exclamationmark")
+        }
+    }
+
+    /// Re-reads cameras, microphones and speakers, e.g. after a device was plugged in.
+    func refreshDevices() {
+        cameras = LocalMedia.cameraDevices.map { MediaDevice(id: $0.uniqueID, name: $0.localizedName) }
+        if let media {
+            media.cameraDevicesChanged()
+            cameraID = media.currentCameraID
+        } else {
+            cameraID = cameras.first?.id
+        }
+        guard let media, let adm = media.audioDeviceModule else { return }
+        let previousMicrophones = microphones
+        let previousSpeakers = speakers
+        microphones = adm.inputDevices.map { MediaDevice(id: $0.deviceId, name: $0.name) }
+        speakers = adm.outputDevices.map { MediaDevice(id: $0.deviceId, name: $0.name) }
+        guard endedMessage == nil else {
+            // The call is over: keep the pickers valid without touching audio or announcing anything.
+            if !microphones.contains(where: { $0.id == microphoneID }) { microphoneID = microphones.first?.id }
+            if !speakers.contains(where: { $0.id == speakerID }) { speakerID = speakers.first?.id }
+            return
+        }
+        microphoneID = reconcileAudioDevice(microphoneID, previous: previousMicrophones, current: microphones, input: true, on: media)
+        speakerID = reconcileAudioDevice(speakerID, previous: previousSpeakers, current: speakers, input: false, on: media)
+    }
+
+    /// Keeps the picker on the same physical device after the device list changed. The module's list
+    /// starts with "default" (id "default"), then every device by its Core Audio id, and it remembers
+    /// the picked device by position.
+    private func reconcileAudioDevice(
+        _ id: String?,
+        previous: [MediaDevice],
+        current: [MediaDevice],
+        input: Bool,
+        on media: LocalMedia
+    ) -> String? {
+        let symbol = input ? "mic.fill" : "speaker.wave.2.fill"
+        // A direction that ran in this call and is now stopped lost its device and the module gave up
+        // (e.g. the only mic was unplugged); it doesn't reopen it when a device shows up again.
+        let reopen = phase == .connected && (input ? audioRan.input : audioRan.output)
+            && !media.isAudioDeviceActive(input: input)
+        if let id, let index = current.firstIndex(where: { $0.id == id }) {
+            let oldIndex = previous.firstIndex(where: { $0.id == id })
+            if reopen {
+                // Same device as before, so nothing to announce.
+                media.selectAudioDevice(id: id, input: input, start: true)
+            } else if let oldIndex, oldIndex != index {
+                // Still there, but another device moved it in the list: point the module at it again.
+                media.selectAudioDevice(id: id, input: input)
+            } else if let oldIndex, previous[oldIndex].name != current[index].name {
+                // "default" now means another device; the module follows it by itself.
+                show("Switched to \(Self.displayName(current[index]))", systemImage: symbol)
+            }
+            return id
+        }
+        guard let fallback = current.first else {
+            guard id != nil else { return nil }
+            if input {
+                if micOn { toggleMic() }
+                show("The microphone was disconnected", systemImage: "mic.slash.fill")
+            } else {
+                show("The speaker was disconnected", systemImage: "speaker.slash.fill")
+            }
+            return nil
+        }
+        // The picked device was unplugged, or the first one arrived after none were left. While audio
+        // runs, the module itself moves to "default" (its HandleDeviceChange); a direction it left
+        // stopped is set here, and reopened when the call needs it.
+        if !media.isAudioDeviceActive(input: input) {
+            guard media.selectAudioDevice(id: fallback.id, input: input, start: reopen) else {
+                // Nothing is selected, so the next device change tries again.
+                show(
+                    "Couldn't switch to \(Self.displayName(fallback))",
+                    systemImage: input ? "mic.badge.xmark" : "speaker.badge.exclamationmark"
+                )
+                return nil
+            }
+            // Only the device to use next time was set; nothing changed in the call.
+            if id == nil && !reopen { return fallback.id }
+        }
+        show("Switched to \(Self.displayName(fallback))", systemImage: symbol)
+        return fallback.id
+    }
+
+    /// Notes once each direction has run, as WebRTC starts it on its own (the speaker only with remote audio).
+    private func noteAudioActivity() {
+        guard let media, !(audioRan.input && audioRan.output) else { return }
+        if !audioRan.input, media.isAudioDeviceActive(input: true) { audioRan.input = true }
+        if !audioRan.output, media.isAudioDeviceActive(input: false) { audioRan.output = true }
+    }
+
+    /// "default (MacBook Pro Microphone)" from the module reads as just the device name.
+    private static func displayName(_ device: MediaDevice) -> String {
+        let prefix = "default ("
+        guard device.id == "default", device.name.hasPrefix(prefix), device.name.hasSuffix(")") else { return device.name }
+        return String(device.name.dropFirst(prefix.count).dropLast())
+    }
+
+    /// The camera picked in an earlier call, when it is still connected.
+    private static var preferredCameraID: String? {
+        guard let id = UserDefaults.standard.string(forKey: cameraPreferenceKey),
+              LocalMedia.cameraDevices.contains(where: { $0.uniqueID == id }) else { return nil }
+        return id
+    }
+
+    /// Applies the microphone and speaker picked in an earlier call, when they are still connected;
+    /// otherwise the module's "default" entry (first in the list) is in use.
+    private func restoreAudioPreferences(on media: LocalMedia) {
+        let defaults = UserDefaults.standard
+        guard let adm = media.audioDeviceModule else { return }
+        let inputs = adm.inputDevices.map(\.deviceId)
+        let outputs = adm.outputDevices.map(\.deviceId)
+        microphoneID = inputs.first
+        speakerID = outputs.first
+        if let id = defaults.string(forKey: Self.microphonePreferenceKey), inputs.contains(id),
+           media.selectAudioDevice(id: id, input: true) {
+            microphoneID = id
+        }
+        if let id = defaults.string(forKey: Self.speakerPreferenceKey), outputs.contains(id),
+           media.selectAudioDevice(id: id, input: false) {
+            speakerID = id
+        }
+    }
+
+    private func observeDevices() {
+        audioDeviceObserver = AudioDeviceListObserver { [weak self] in
+            self?.refreshDevices()
+        }
+        let center = NotificationCenter.default
+        for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
+            deviceObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.refreshDevices()
+            })
+        }
+    }
+
+    private static func requestMediaAccess(then completion: @escaping (_ camera: Bool, _ microphone: Bool) -> Void) {
+        AVCaptureDevice.requestAccess(for: .video) { camera in
+            AVCaptureDevice.requestAccess(for: .audio) { microphone in
+                DispatchQueue.main.async { completion(camera, microphone) }
+            }
+        }
+    }
+    #endif
 
     /// Called when the chat sheet opens. The channel normally exists since the call connected.
     func openChat() {
@@ -551,6 +840,11 @@ final class CallViewModel {
         frontCamera = media.isFrontCamera
         effectsAvailable = media.isEffectsAvailable
         if savedEffects { applyEffects() }
+        #if os(macOS)
+        media.startCamera(preferredCameraID: Self.preferredCameraID)
+        restoreAudioPreferences(on: media)
+        refreshDevices()
+        #endif
         return media
     }
 
@@ -603,6 +897,9 @@ final class CallViewModel {
             return
         }
         if !isGroup, let client, !client.hasPeerConnection {
+            #if os(macOS)
+            idleMicMeter.inputID = microphoneID
+            #endif
             showMicPeak(idleMicMeter.peak())
             return
         }
@@ -642,6 +939,9 @@ final class CallViewModel {
             self.broadcastActive = active
             if !active && self.sharing == .screen {
                 self.sharing = .none
+                #if os(macOS)
+                self.sharingTitle = nil
+                #endif
                 self.show("Screen sharing stopped", systemImage: "rectangle.on.rectangle.slash")
             }
             self.sendMediaState()
@@ -846,12 +1146,21 @@ extension CallViewModel: GroupCallClientDelegate {
         onMain {
             self.group = nil
             self.chat = .closed
+            // Like web's leave(): nothing of the room stays on screen behind the "Call ended" alert.
+            self.participants = []
+            self.remoteVideoTracks = [:]
+            self.audioLevels = [:]
+            self.activeSpeaker = nil
+            self.lastSpeech = nil
+            self.selfId = nil
+            self.connectedSince = nil
             self.phase = .waiting
             self.endedMessage = message
         }
     }
 }
 
+#if os(iOS)
 /// Reports why WebRTC's audio unit did not start. Otherwise a dead microphone and silent playout
 /// look exactly like a quiet call: video keeps flowing and nothing fails.
 private final class AudioSessionWatcher: NSObject, RTCAudioSessionDelegate {
@@ -981,3 +1290,111 @@ private final class IdleMicMeter {
         }
     }
 }
+#else
+/// Measures the microphone while a 1:1 call waits for the other person: there is no peer
+/// connection yet, so WebRTC records nothing. It must be stopped before WebRTC opens the microphone.
+/// macOS has no shared audio session, so it taps the input picked in the toolbar with its own engine.
+/// The engine starts on `queue`, as opening a Bluetooth input can take a moment; `stop` waits for it,
+/// since WebRTC opens the microphone right after. Nothing on `queue` waits for the main thread.
+private final class IdleMicMeter {
+    /// The audio module's id for the microphone: "default" (the system's) or a Core Audio device id.
+    var inputID: String? {
+        didSet {
+            guard inputID != oldValue else { return }
+            let id = inputID
+            queue.async { [self] in
+                tearDown()
+                deviceID = id
+                unavailable = false
+            }
+        }
+    }
+    private let queue = DispatchQueue(label: "IdleMicMeter")
+    /// Filled on the audio thread, read and reset on the main thread.
+    private let lock = NSLock()
+    private var loudest: Float = 0
+    /// Main thread: a start was requested since the last stop, so `stop` has something to wait for.
+    private var requested = false
+    // Only touched on `queue`.
+    private var engine: AVAudioEngine?
+    private var deviceID: String?
+    /// Recording failed for this input; not retried every tick.
+    private var unavailable = false
+
+    /// Linear peak (0...1) since the previous call; starts recording on first use.
+    func peak() -> Double {
+        requested = true
+        queue.async { [self] in
+            // The engine stops itself when the input's configuration changes (another default input,
+            // a new sample rate, sleep); it is set up again for the new one.
+            if let engine, !engine.isRunning { tearDown() }
+            if engine == nil && !unavailable { start() }
+        }
+        return lock.withLock {
+            defer { loudest = 0 }
+            return Double(loudest)
+        }
+    }
+
+    /// Returns once the engine is stopped. `queue` is serial, so any start asked for earlier has
+    /// already run and is torn down here.
+    func stop() {
+        guard requested else { return }
+        requested = false
+        queue.sync { tearDown() }
+        lock.withLock { loudest = 0 }
+    }
+
+    func release() {
+        stop()
+        queue.sync { unavailable = false }
+    }
+
+    private func tearDown() {
+        guard let engine else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        self.engine = nil
+    }
+
+    private func start() {
+        // Asked when the call starts; until it is granted the bars stay flat.
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        if let device = deviceID.flatMap({ AudioDeviceID($0) }), let unit = input.audioUnit {
+            var device = device
+            let status = AudioUnitSetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                &device, UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+            if status != noErr { print("[audio] level meter couldn't pick input \(device): \(status)") }
+        }
+        // The device's own format, read after picking it: a tap in any other sample rate raises an
+        // Objective-C exception, which Swift can't catch.
+        let format = input.inputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            unavailable = true
+            return
+        }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self, let channels = buffer.floatChannelData else { return }
+            var peak: Float = 0
+            for channel in 0..<Int(buffer.format.channelCount) {
+                for frame in 0..<Int(buffer.frameLength) {
+                    peak = max(peak, abs(channels[channel][frame]))
+                }
+            }
+            self.lock.withLock { self.loudest = max(self.loudest, peak) }
+        }
+        do {
+            try engine.start()
+            self.engine = engine
+        } catch {
+            print("[audio] level meter couldn't record: \(error)")
+            input.removeTap(onBus: 0)
+            unavailable = true
+        }
+    }
+}
+#endif

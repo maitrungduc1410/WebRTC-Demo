@@ -8,6 +8,9 @@ import SwiftUI
 /// Picks a background (blur, picture or video) and a face sticker, with a live preview.
 struct EffectsSheet: View {
     let model: CallViewModel
+    #if os(macOS)
+    var onClose: (() -> Void)?
+    #endif
 
     private enum Kind: String, CaseIterable {
         case backgrounds = "Backgrounds"
@@ -30,6 +33,24 @@ struct EffectsSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 4)
+                #if os(macOS)
+                .padding(.trailing, onClose == nil ? 0 : 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .topTrailing) {
+                    if let onClose {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.footnote.weight(.bold))
+                                .frame(width: 28, height: 28)
+                                .contentShape(.circle)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .help("Close (Esc)")
+                        .accessibilityLabel("Close backgrounds and effects")
+                    }
+                }
+                #endif
 
                 preview
 
@@ -37,6 +58,10 @@ struct EffectsSheet: View {
                     ForEach(Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                #if os(macOS)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                #endif
 
                 Group {
                     switch tab {
@@ -45,6 +70,15 @@ struct EffectsSheet: View {
                     }
                 }
                 .disabled(!enabled)
+
+                #if os(macOS)
+                if tab == .backgrounds && !catalog.backgrounds.contains(where: { $0.kind == .image || $0.kind == .video }) {
+                    Text("Add pictures and videos to the effects folder to see them here.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                }
+                #endif
             }
             .padding(20)
         }
@@ -52,12 +86,19 @@ struct EffectsSheet: View {
     }
 
     private var preview: some View {
+        #if os(iOS)
         let mirror = model.frontCamera
+        #endif
         return ZStack {
             Color.black
             if enabled && model.cameraOn {
+                #if os(iOS)
                 VideoView(track: model.localTrack, fill: true)
                     .scaleEffect(x: mirror ? -1 : 1, y: 1)
+                #else
+                // SwiftUI transforms and clips don't reliably reach the hosted NSView.
+                VideoView(track: model.localTrack, fill: true, mirror: true, cornerRadius: 24)
+                #endif
             } else {
                 Text(previewMessage)
                     .font(.subheadline)
@@ -112,6 +153,9 @@ struct EffectsSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
                     .padding(.top, 4)
+                    #if os(macOS)
+                    .accessibilityAddTraits(.isHeader)
+                    #endif
             }
         }
     }
@@ -175,12 +219,19 @@ private struct EffectTile<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @Environment(\.isEnabled) private var isEnabled
+    #if os(macOS)
+    @State private var hovering = false
+    #endif
 
     var body: some View {
         Button(action: action) {
             Color.clear
                 .aspectRatio(aspect, contentMode: .fit)
+                #if os(macOS)
+                .overlay { content().scaleEffect(hovering && isEnabled ? 1.06 : 1) }
+                #else
                 .overlay { content() }
+                #endif
                 .background(.fill.tertiary)
                 .clipShape(.rect(cornerRadius: 16, style: .continuous))
                 .overlay {
@@ -189,6 +240,14 @@ private struct EffectTile<Content: View>: View {
                             .strokeBorder(Color.accentColor, lineWidth: 3)
                     }
                 }
+                #if os(macOS)
+                .overlay {
+                    if hovering && isEnabled && !selected {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.white.opacity(0.3), lineWidth: 1)
+                    }
+                }
+                #endif
                 .scaleEffect(selected ? 0.94 : 1)
                 .opacity(isEnabled ? 1 : 0.4)
                 .contentShape(.rect(cornerRadius: 16, style: .continuous))
@@ -198,6 +257,11 @@ private struct EffectTile<Content: View>: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: selected) { _, now in now }
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: selected)
+        #if os(macOS)
+        .onHover { hovering = $0 }
+        .help(label)
+        .animation(.easeOut(duration: 0.2), value: hovering)
+        #endif
     }
 }
 
@@ -206,12 +270,16 @@ private struct AssetImage: View {
     let url: URL
     let fill: Bool
 
+    #if os(iOS)
     @State private var image: UIImage?
+    #else
+    @State private var image: NSImage?
+    #endif
 
     var body: some View {
         GeometryReader { proxy in
             if let image {
-                Image(uiImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .aspectRatio(contentMode: fill ? .fill : .fit)
                     .frame(width: proxy.size.width, height: proxy.size.height)
@@ -220,7 +288,11 @@ private struct AssetImage: View {
         }
         .task(id: url) {
             image = await Task.detached(priority: .userInitiated) { [url] in
+                #if os(iOS)
                 EffectsCatalog.decode(url, maxSide: 320).map { UIImage(cgImage: $0) }
+                #else
+                EffectsCatalog.decode(url, maxSide: 320).map { NSImage(cgImage: $0, size: .zero) }
+                #endif
             }.value
         }
     }

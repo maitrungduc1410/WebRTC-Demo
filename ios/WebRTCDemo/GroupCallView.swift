@@ -21,6 +21,8 @@ struct GroupCallView: View {
     @State private var showPhotoPicker = false
     @State private var photoItem: PhotosPickerItem?
     @State private var showFileImporter = false
+    /// Shown once nothing else is presented, since an alert can't appear over a sheet that is still closing.
+    @State private var endedAlert: String?
 
     private static let controlsAutoHide: Duration = .seconds(5)
     private static let toastLifetime: Duration = .seconds(2.5)
@@ -114,10 +116,22 @@ struct GroupCallView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+        .onChange(of: model.endedMessage) { _, message in
+            // Nothing of the finished call stays open over the "Call ended" alert.
+            guard let message else { return }
+            let covered = sheet != nil || showPhotoPicker || showFileImporter
+            sheet = nil
+            showPhotoPicker = false
+            showFileImporter = false
+            Task { @MainActor in
+                if covered { try? await Task.sleep(for: .milliseconds(600)) }
+                endedAlert = message
+            }
+        }
         .alert(
             "Call ended",
-            isPresented: Binding(get: { model.endedMessage != nil }, set: { _ in }),
-            presenting: model.endedMessage
+            isPresented: Binding(get: { endedAlert != nil }, set: { _ in }),
+            presenting: endedAlert
         ) { _ in
             Button("Back to lobby", action: leave)
         } message: { message in
@@ -161,7 +175,7 @@ struct GroupCallView: View {
             RecentMessages(messages: model.messages, visible: sheet != .chat)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if !hasOthers {
+            if !hasOthers && model.endedMessage == nil {
                 WaitingCard(model: model)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }

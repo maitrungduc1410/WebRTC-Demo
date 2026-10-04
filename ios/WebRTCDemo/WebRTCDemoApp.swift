@@ -23,10 +23,11 @@ private struct CallRoute: Identifiable {
 
 private struct RootView: View {
     @State private var call: CallRoute?
+    @State private var lobby = LobbyForm()
 
     var body: some View {
         NavigationStack {
-            LobbyView { roomId, e2ee, group in
+            LobbyView(form: lobby) { roomId, e2ee, group in
                 call = CallRoute(roomId: roomId, e2ee: e2ee, group: group)
             }
             .toolbar(.hidden, for: .navigationBar)

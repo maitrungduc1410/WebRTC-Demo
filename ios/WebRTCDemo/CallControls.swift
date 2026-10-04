@@ -11,17 +11,50 @@ struct GlassCircleButton: View {
     let label: String
     var active = false
     var size: CGFloat = 56
+    /// Keyboard shortcut shown in the macOS tooltip.
+    var shortcut: String? = nil
     let action: () -> Void
+    #if os(macOS)
+    @Environment(\.isEnabled) private var isEnabled
+    #endif
 
     var body: some View {
         Button(action: action) {
             GlassCircleLabel(systemImage: systemImage, active: active, size: size)
         }
         .buttonStyle(.plain)
+        #if os(macOS)
+        .hoverLift()
+        #endif
         .glassEffect(active ? .regular.tint(.white).interactive() : .regular.interactive(), in: .circle)
         .accessibilityLabel(label)
+        #if os(macOS)
+        .help(isEnabled ? shortcut.map { "\(label) (\($0))" } ?? label : label)
+        #endif
     }
 }
+
+#if os(macOS)
+/// Pointer feedback for glass controls: a slight lift while hovered, a dip while pressed.
+struct HoverLift: ViewModifier {
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(hovering && isEnabled ? 1.07 : 1)
+            .brightness(hovering && isEnabled ? 0.06 : 0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hovering)
+            .onHover { hovering = $0 }
+    }
+}
+
+extension View {
+    func hoverLift() -> some View {
+        modifier(HoverLift())
+    }
+}
+#endif
 
 struct GlassCircleLabel: View {
     let systemImage: String
@@ -38,6 +71,7 @@ struct GlassCircleLabel: View {
     }
 }
 
+#if os(iOS)
 /// The floating call toolbar: media toggles, sharing, chat, more and hang up.
 struct CallToolbar: View {
     let model: CallViewModel
@@ -141,8 +175,9 @@ struct CallToolbar: View {
         }
     }
 }
+#endif
 
-private struct ChatButtonBounds: PreferenceKey {
+struct ChatButtonBounds: PreferenceKey {
     static var defaultValue: Anchor<CGRect>? { nil }
 
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
@@ -150,7 +185,7 @@ private struct ChatButtonBounds: PreferenceKey {
     }
 }
 
-private struct UnreadBadge: View {
+struct UnreadBadge: View {
     let count: Int
 
     var body: some View {
@@ -166,6 +201,7 @@ private struct UnreadBadge: View {
     }
 }
 
+#if os(iOS)
 /// Secondary call options, shown in a sheet so the toolbar stays small.
 struct MoreSheet: View {
     let model: CallViewModel
@@ -301,3 +337,4 @@ struct OptionTile: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: active)
     }
 }
+#endif

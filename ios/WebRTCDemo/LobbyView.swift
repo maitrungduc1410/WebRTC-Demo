@@ -6,18 +6,45 @@
 import SwiftUI
 
 struct LobbyView: View {
+    @Bindable var form: LobbyForm
     let onJoin: (_ roomId: String, _ e2ee: Bool, _ group: Bool) -> Void
 
-    @State private var roomId = LobbyView.randomRoomId()
-    @State private var e2ee = false
-    @State private var group = false
     @State private var shuffleTurns = 0.0
     @State private var joins = 0
+    @FocusState private var roomFieldFocused: Bool
+    #if os(iOS)
     @State private var serverURL = SignalingServer.current
     @State private var sfuURL = SFUServer.current
     @State private var editingServer: ServerKind?
-    @FocusState private var roomFieldFocused: Bool
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #else
+    /// Edited in Settings; nil while the default address is used.
+    @AppStorage(SignalingServer.key) private var storedServer: String?
+    @AppStorage(SFUServer.key) private var storedSFU: String?
+    @State private var wide = false
+
+    private var serverURL: String { storedServer ?? SignalingServer.defaultURL }
+    private var sfuURL: String { storedSFU ?? SFUServer.defaultURL }
+    #endif
+
+    /// The shuffle button closes the number pad while typing, as it has no return key.
+    /// A Mac keyboard has one and the field is focused from the start, so it stays shuffle there.
+    private var showsDone: Bool {
+        #if os(iOS)
+        return roomFieldFocused
+        #else
+        return false
+        #endif
+    }
+
+    private var twoColumns: Bool {
+        #if os(iOS)
+        // An iPhone on its side has room for two columns but not for the stacked layout.
+        return verticalSizeClass == .compact
+        #else
+        return wide
+        #endif
+    }
 
     var body: some View {
         ZStack {
@@ -27,12 +54,11 @@ struct LobbyView: View {
 
             ScrollView {
                 Group {
-                    // An iPhone on its side has room for two columns but not for the stacked layout.
-                    if verticalSizeClass == .compact {
+                    if twoColumns {
                         HStack(spacing: 40) {
                             header(spacing: 20)
                                 .frame(maxWidth: .infinity)
-                            form
+                            fields
                                 .frame(maxWidth: 400)
                         }
                         .padding(.horizontal, 24)
@@ -41,7 +67,7 @@ struct LobbyView: View {
                     } else {
                         VStack(spacing: 32) {
                             header(spacing: 32)
-                            form
+                            fields
                         }
                         .padding(24)
                         .frame(maxWidth: 460)
@@ -51,17 +77,23 @@ struct LobbyView: View {
             }
             .defaultScrollAnchor(.center, for: .alignment)
             .scrollBounceBehavior(.basedOnSize)
+            #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
+            #endif
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
                     serverButton(.signaling, url: serverURL)
-                    if group {
+                    if form.group {
                         serverButton(.sfu, url: sfuURL)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
+                #if os(macOS)
+                .padding(.bottom, 8)
+                #endif
             }
         }
+        #if os(iOS)
         // The room field stays above the number pad even on the smallest iPhone, so the keyboard never
         // needs to move the form.
         .ignoresSafeArea(.keyboard)
@@ -77,14 +109,21 @@ struct LobbyView: View {
                 }
             }
         }
+        #endif
         .sensoryFeedback(.impact(weight: .medium), trigger: joins)
         .sensoryFeedback(.selection, trigger: shuffleTurns)
+        #if os(iOS)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { roomFieldFocused = false }
             }
         }
+        #else
+        .overlay(alignment: .top) { WindowDragStrip() }
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 820 } action: { wide = $0 }
+        .onAppear { roomFieldFocused = true }
+        #endif
     }
 
     private func header(spacing: CGFloat) -> some View {
@@ -102,37 +141,42 @@ struct LobbyView: View {
         }
     }
 
-    private var form: some View {
+    private var fields: some View {
         GlassEffectContainer(spacing: 16) {
             VStack(spacing: 14) {
                 HStack(spacing: 12) {
-                    TextField("Room ID", text: $roomId)
+                    TextField("Room ID", text: $form.roomId)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #else
+                        .textFieldStyle(.plain)
+                        .onSubmit(join)
+                        #endif
                         .focused($roomFieldFocused)
                         .font(.title2.weight(.semibold).monospacedDigit())
                         .multilineTextAlignment(.center)
                         .padding(.vertical, 16)
                         .padding(.horizontal, 20)
                         .glassEffect(.regular.interactive(), in: .capsule)
-                        .onChange(of: roomId) { _, value in
+                        .onChange(of: form.roomId) { _, value in
                             let digits = String(value.filter(\.isNumber).prefix(12))
-                            if digits != value { roomId = digits }
+                            if digits != value { form.roomId = digits }
                         }
 
                     // While typing it closes the number pad, which has no return key. SwiftUI's
                     // keyboard toolbar (Done) sometimes never shows, which left no way out.
                     Button {
-                        if roomFieldFocused {
+                        if showsDone {
                             roomFieldFocused = false
                             return
                         }
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                             shuffleTurns += 1
-                            roomId = Self.randomRoomId()
+                            form.roomId = LobbyForm.randomRoomId()
                         }
                     } label: {
                         ZStack {
-                            if roomFieldFocused {
+                            if showsDone {
                                 Image(systemName: "checkmark")
                                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                             } else {
@@ -144,29 +188,38 @@ struct LobbyView: View {
                         .font(.title3.weight(.semibold))
                         .frame(width: 60, height: 60)
                         .contentShape(.circle)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: roomFieldFocused)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: showsDone)
                     }
                     .buttonStyle(.plain)
+                    #if os(macOS)
+                    .hoverLift()
+                    .help("Random room")
+                    #endif
                     .glassEffect(.regular.interactive(), in: .circle)
-                    .accessibilityLabel(roomFieldFocused ? "Done" : "Random room")
+                    .accessibilityLabel(showsDone ? "Done" : "Random room")
                 }
 
-                Toggle(isOn: $e2ee.animation(.snappy)) {
+                Toggle(isOn: $form.e2ee.animation(.snappy)) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("End-to-end encryption")
                                 .font(.body.weight(.medium))
-                            Text(e2ee ? "Frames are encrypted on this device" : (group ? "Everyone must turn it on" : "Both peers must turn it on"))
+                            Text(form.e2ee ? "Frames are encrypted on this device" : (form.group ? "Everyone must turn it on" : "Both peers must turn it on"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .contentTransition(.opacity)
                         }
                     } icon: {
-                        Image(systemName: e2ee ? "lock.fill" : "lock.open.fill")
+                        Image(systemName: form.e2ee ? "lock.fill" : "lock.open.fill")
                             .contentTransition(.symbolEffect(.replace))
-                            .foregroundStyle(e2ee ? Color(hex: 0x4ADE80) : .secondary)
+                            .foregroundStyle(form.e2ee ? Color(hex: 0x4ADE80) : .secondary)
                     }
+                    // A Mac switch hugs its label instead of filling the row.
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                #if os(macOS)
+                .toggleStyle(.switch)
+                #endif
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
                 .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
@@ -175,7 +228,7 @@ struct LobbyView: View {
 
                 Button(action: join) {
                     HStack(spacing: 10) {
-                        Text(group ? "Join group call" : "Join room")
+                        Text(form.group ? "Join group call" : "Join room")
                         Image(systemName: "arrow.right")
                     }
                     .font(.headline)
@@ -184,29 +237,36 @@ struct LobbyView: View {
                 }
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
-                .disabled(roomId.isEmpty)
+                #if os(macOS)
+                .keyboardShortcut(.defaultAction)
+                #endif
+                .disabled(form.roomId.isEmpty)
             }
         }
     }
 
     /// Group calls are an advanced mode, so this stays smaller than the E2EE switch.
     private var groupToggle: some View {
-        Toggle(isOn: $group.animation(.snappy)) {
+        Toggle(isOn: $form.group.animation(.snappy)) {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Group call (SFU)")
                         .font(.subheadline.weight(.medium))
-                    Text(group ? "More than 2 people through the SFU server" : "Advanced: needs sfu-server")
+                    Text(form.group ? "More than 2 people through the SFU server" : "Advanced: needs sfu-server")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .contentTransition(.opacity)
                 }
             } icon: {
-                Image(systemName: group ? "person.3.fill" : "person.2.fill")
+                Image(systemName: form.group ? "person.3.fill" : "person.2.fill")
                     .contentTransition(.symbolEffect(.replace))
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        #if os(macOS)
+        .toggleStyle(.switch)
+        #endif
         .controlSize(.small)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -214,44 +274,67 @@ struct LobbyView: View {
     }
 
     private func serverButton(_ kind: ServerKind, url: String) -> some View {
+        #if os(iOS)
         Button {
             roomFieldFocused = false
             editingServer = kind
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: kind.systemImage)
-                Text(url)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Image(systemName: "pencil")
-                    .font(.caption.weight(.semibold))
-            }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .contentShape(.capsule)
+            serverLabel(kind, url: url)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 24)
         .accessibilityLabel("\(kind.title), \(url)")
         .accessibilityHint("Changes the \(kind.title.lowercased())")
+        #else
+        SettingsLink {
+            serverLabel(kind, url: url)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .help("Change the \(kind.title.lowercased()) in Settings (⌘,)")
+        .accessibilityLabel("\(kind.title), \(url)")
+        .accessibilityHint("Opens Settings")
+        #endif
+    }
+
+    private func serverLabel(_ kind: ServerKind, url: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: kind.systemImage)
+            Text(url)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Image(systemName: "pencil")
+                .font(.caption.weight(.semibold))
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .contentShape(.capsule)
     }
 
     private func join() {
-        guard !roomId.isEmpty else { return }
+        guard !form.roomId.isEmpty else { return }
         roomFieldFocused = false
         joins += 1
-        onJoin(roomId, e2ee, group)
+        onJoin(form.roomId, form.e2ee, form.group)
     }
+}
 
-    private static func randomRoomId() -> String {
+/// What the lobby is set to. The root view owns it, so leaving a call comes back to the same room and switches.
+@Observable
+final class LobbyForm {
+    var roomId = LobbyForm.randomRoomId()
+    var e2ee = false
+    var group = false
+
+    static func randomRoomId() -> String {
         String(Int.random(in: 100000...999999))
     }
 }
 
 /// The two servers the lobby can point at: the signaling server for 1:1 calls, the SFU for group calls.
-private enum ServerKind: String, Identifiable {
+enum ServerKind: String, Identifiable {
     case signaling, sfu
 
     var id: String { rawValue }
@@ -283,6 +366,7 @@ private enum ServerKind: String, Identifiable {
     }
 }
 
+#if os(iOS)
 /// Edits a server address. Saving normalizes it so the lobby always shows what calls will use.
 private struct ServerSheet: View {
     let kind: ServerKind
@@ -373,8 +457,10 @@ private struct ServerSheet: View {
     }
 }
 
+#endif
+
 /// A slowly drifting mesh gradient in the app's indigo/violet palette.
-private struct LobbyBackdrop: View {
+struct LobbyBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -412,7 +498,7 @@ private struct LobbyBackdrop: View {
 }
 
 /// The app mark: a glass disc with a breathing camera symbol and a slowly turning halo.
-private struct HeroBadge: View {
+struct HeroBadge: View {
     @State private var turning = false
 
     var body: some View {
@@ -447,9 +533,11 @@ private struct HeroBadge: View {
 }
 
 #Preview {
-    LobbyView { _, _, _ in }
+    LobbyView(form: LobbyForm()) { _, _, _ in }
 }
 
+#if os(iOS)
 #Preview("Landscape", traits: .landscapeLeft) {
-    LobbyView { _, _, _ in }
+    LobbyView(form: LobbyForm()) { _, _, _ in }
 }
+#endif

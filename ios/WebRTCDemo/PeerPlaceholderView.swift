@@ -38,7 +38,7 @@ enum Avatar {
 /// Messenger-style "video off" state: the last frame blurred behind a gradient avatar whose rings
 /// pulse with the participant's voice.
 struct PeerPlaceholderView<Action: View>: View {
-    var snapshot: UIImage?
+    var snapshot: PlatformImage?
     var seed: String
     var audioLevel: Double = 0
     var avatarSize: CGFloat = 112
@@ -53,7 +53,7 @@ struct PeerPlaceholderView<Action: View>: View {
             Color.clear
                 .overlay {
                     if let snapshot {
-                        Image(uiImage: snapshot)
+                        Image(platformImage: snapshot)
                             .resizable()
                             .interpolation(.low)
                             .scaledToFill()
@@ -99,7 +99,7 @@ struct PeerPlaceholderView<Action: View>: View {
 
 extension PeerPlaceholderView where Action == EmptyView {
     init(
-        snapshot: UIImage?,
+        snapshot: PlatformImage?,
         seed: String,
         audioLevel: Double = 0,
         avatarSize: CGFloat = 112,
