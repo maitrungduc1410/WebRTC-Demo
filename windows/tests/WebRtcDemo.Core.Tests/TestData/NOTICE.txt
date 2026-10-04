@@ -1,0 +1,6 @@
+portrait.jpg: "President Barack Obama", official White House photo by Pete Souza (2012), a work of
+the U.S. federal government and therefore in the public domain. 500 px wide rendition from
+https://commons.wikimedia.org/wiki/File:President_Barack_Obama.jpg
+sha256 8e6ff05a09df260a30d766724aeaeaca58fd5d7a78454d3a6025a86f0f29be30
+
+Used only as input for the effects model tests (one frontal face, plain room behind).

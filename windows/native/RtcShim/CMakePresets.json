@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "win-x64",
+      "displayName": "Windows x64 (Visual Studio; build-shim.ps1 picks the generator)",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "LIBWEBRTC_DIR": "${sourceDir}/third_party/libwebrtc/x64/libwebrtc-x64-release"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "win-arm64",
+      "displayName": "Windows arm64 (Visual Studio; build-shim.ps1 picks the generator)",
+      "architecture": "ARM64",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "LIBWEBRTC_DIR": "${sourceDir}/third_party/libwebrtc/arm64/libwebrtc-arm64-release"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "linux-test",
+      "displayName": "Linux loopback test build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "LIBWEBRTC_DIR": "${sourceDir}/third_party/libwebrtc/linux-x64/linux-x64-release",
+        "RTC_SHIM_BUILD_TESTS": "ON"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "win-x64", "configurePreset": "win-x64" },
+    { "name": "win-arm64", "configurePreset": "win-arm64" },
+    { "name": "linux-test", "configurePreset": "linux-test" }
+  ]
+}

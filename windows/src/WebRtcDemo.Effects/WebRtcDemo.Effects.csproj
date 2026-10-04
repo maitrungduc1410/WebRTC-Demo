@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Backgrounds and face stickers: catalog, sticker placement, the ONNX models and the CPU
+       compositor. No UI or WebRTC dependency, so the same code runs in the app and in the Linux
+       tests (with the CPU ONNX Runtime). The app supplies Windows ML session options. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>WebRtcDemo.Effects</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- API only. Must stay on the ONNX Runtime minor that Windows ML ships (its onnxruntime.dll
+         is the native side in the app); the tests add the CPU natives. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" />
+    <PackageReference Include="StbImageSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WebRtcDemo.Core.Tests" />
+  </ItemGroup>
+
+</Project>

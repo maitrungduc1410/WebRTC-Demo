@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>WebRtcDemo.Core.Tests</RootNamespace>
+    <!-- Test names read better with underscores. -->
+    <NoWarn>$(NoWarn);CA1707;CA2007;CA1515;CA1001;CA1063;CA1816;CA2000;xUnit1031</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit.v3" />
+    <!-- CPU natives for the real-model tests (the app uses Windows ML's runtime instead). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+  </ItemGroup>
+
+  <!-- The shared effects folder and the models, at the same relative paths as in the app. -->
+  <ItemGroup>
+    <None Include="../../../effects/**/*" Exclude="../../../effects/**/.*;../../../effects/**/.*/**" Link="effects/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="../../models/*.onnx" Link="models/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="TestData/*.jpg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/WebRtcDemo.Core/WebRtcDemo.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The native tests load rtc_shim from the output folder. On Windows that is
+       out/install/x64 (scripts/build-shim.ps1); on Linux pass -p:RtcShimNativeDir=<dir with
+       librtc_shim.so and libwebrtc.so>. Without it they are skipped. -->
+  <PropertyGroup>
+    <RtcShimNativeDir Condition="'$(RtcShimNativeDir)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">$(RtcShimInstallRoot)x64</RtcShimNativeDir>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RtcShimNativeDir)' != '' and Exists('$(RtcShimNativeDir)')">
+    <None Include="$(RtcShimNativeDir)/*.dll;$(RtcShimNativeDir)/*.so" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+</Project>

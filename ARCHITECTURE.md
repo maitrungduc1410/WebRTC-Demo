@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how WebRTC-Demo is put together: the signaling server, the clients (Web, Android, iOS, macOS), how a call is set up, how media sources are switched, and how end-to-end encryption (E2EE) and backgrounds and effects work on every platform.
+This document explains how WebRTC-Demo is put together: the signaling server, the clients (Web, Android, iOS, macOS, Windows), how a call is set up, how media sources are switched, and how end-to-end encryption (E2EE) and backgrounds and effects work on every platform.
 
 - [1. Big picture](#1-big-picture)
 - [2. Repository layout](#2-repository-layout)
@@ -10,6 +10,7 @@ This document explains how WebRTC-Demo is put together: the signaling server, th
 - [6. Android client](#6-android-client)
 - [7. iOS client](#7-ios-client)
 - [7b. macOS client](#7b-macos-client)
+- [7c. Windows client](#7c-windows-client)
 - [8. Switching media sources](#8-switching-media-sources)
 - [9. End-to-end encryption](#9-end-to-end-encryption)
 - [10. Backgrounds and effects](#10-backgrounds-and-effects)
@@ -26,9 +27,9 @@ Two peers join the same room through a small WebSocket signaling server. The ser
 
 ```mermaid
 flowchart LR
-    A["Peer A<br/>Web / Android / iOS / macOS"]
+    A["Peer A<br/>Web / Android / iOS / macOS / Windows"]
     S["Signaling server<br/>Node.js + ws<br/>:4000"]
-    B["Peer B<br/>Web / Android / iOS / macOS"]
+    B["Peer B<br/>Web / Android / iOS / macOS / Windows"]
     STUN["STUN<br/>stun.l.google.com:19302"]
 
     A <-- "control plane (WebSocket, JSON)<br/>rooms, SDP, ICE, E2EE key" --> S
@@ -38,7 +39,7 @@ flowchart LR
     B -. "public address" .-> STUN
 ```
 
-Any client can call any other client (Web ↔ Android ↔ iOS ↔ macOS). A room holds at most **2 participants** (1:1 calls).
+Any client can call any other client (Web ↔ Android ↔ iOS ↔ macOS ↔ Windows). A room holds at most **2 participants** (1:1 calls).
 
 That is the default mode and needs nothing else. **Group calls** are an optional, advanced mode: run `sfu-server/` (Go + Pion), pick "Group call (SFU)" in the lobby, and several participants (8 by default, set with `-max-participants`) join one room through a Selective Forwarding Unit. The clients still use only standard WebRTC APIs. See [section 12](#12-group-call-sfu-optional).
 
@@ -50,6 +51,7 @@ That is the default mode and needs nothing else. **Group calls** are an optional
 | iOS client | Swift, SwiftUI + Liquid Glass (iOS 26), Swift package `WebRTC` (webrtc-sdk/Specs), Vision, Core Image, `URLSessionWebSocketTask` | `ios/WebRTCDemo/WebRTCDemoApp.swift` |
 | macOS client | Swift, SwiftUI + AppKit + Liquid Glass (macOS 26), same package and shared engines, ScreenCaptureKit, AVFoundation | `ios/WebRTCDemoMac/WebRTCDemoMacApp.swift` |
 | iOS broadcast extension | ReplayKit, Unix domain socket | `ios/WebRTCDemoScreenBroadcast/SampleHandler.swift` |
+| Windows client | C# / .NET 10, WinUI 3 (Windows App SDK 2.5), libwebrtc `m150.7871.03` via a C shim, `ClientWebSocket`, Direct3D 11 | `windows/src/WebRtcDemo.App/App.cs`, `windows/src/WebRtcDemo.Core/Call/CallViewModel.cs` |
 
 ---
 
@@ -70,7 +72,7 @@ WebRTC-Demo/
 │   ├── backgrounds.json, stickers.json
 │   └── backgrounds/, thumbnails/, stickers/
 ├── tools/prepare_effects.py   Turns downloads in effects-source/ into effects/backgrounds
-├── tools/make_app_icons.py    Draws the iOS, macOS and Android app icons from one design
+├── tools/make_app_icons.py    Draws the iOS, macOS, Android and Windows app icons from one design
 ├── web/                       Vue 3 single-page client
 │   └── src/
 │       ├── App.vue            Lobby ↔ call transition, theme, toasts
@@ -117,46 +119,67 @@ WebRTC-Demo/
 │   │                                    BackgroundVideo, StickerPlacement
 │   ├── java/org/webrtc/Camera{1,2}Helper.kt  Camera capture formats (package-private webrtc API)
 │   └── assets/                     selfie_segmenter.tflite, face_landmarker.task (effects/ is copied in at build time)
-└── ios/
-    ├── WebRTCDemo.xcodeproj         iOS app, broadcast extensions and Mac app
-    ├── Packages/WebRTC/             Local Swift package: the webrtc-sdk/Specs WebRTC binary
-    ├── WebRTCDemo/                  iOS app; files marked (shared) are also compiled into the Mac app
-    │   ├── WebRTCDemoApp.swift          @main SwiftUI app: lobby, call as a full screen cover
-    │   ├── LobbyView.swift              Room id, E2EE toggle, join button (shared)
-    │   ├── CallViewModel.swift          @Observable call state, owns LocalMedia + the 1:1 or group engine (shared)
-    │   ├── CallView.swift               iOS call screen: remote stage, local PiP, top bar
-    │   ├── CallOverlays.swift           Room pill, status chips, waiting card, recent messages (shared)
-    │   ├── CallControls.swift           Glass buttons (shared), iOS toolbar and "More" sheet
-    │   ├── ChatView.swift               Chat sheet / side panel (shared)
-    │   ├── PeerPlaceholderView.swift    Blurred last frame + speaking avatar (shared)
-    │   ├── VideoView.swift              RTCMTLVideoView wrapper (UIKit and AppKit), FrameSnapshotter (shared)
-    │   ├── PictureInPicture.swift       System PiP: AVSampleBufferDisplayLayer renderer
-    │   ├── LocalMedia.swift             Factory, tracks, capturers, effects; used by both engines (shared)
-    │   ├── PeerConnectionClient.swift   class WebRTCClient: the 1:1 engine (shared)
-    │   ├── SignalingSocket.swift        JSON over URLSessionWebSocketTask; used by both engines (shared)
-    │   ├── GroupCallClient.swift        Group engine: SFU WebSocket, publish + subscribe PeerConnections (shared)
-    │   ├── SFUServer.swift              SFU address: normalize, save (shared)
-    │   ├── GroupCallView.swift          iOS group call screen: participant grid, people sheet
-    │   ├── FrameEncryption.swift        E2EE key provider and frame cryptors; used by both engines (shared)
-    │   ├── EffectsCatalog.swift         Reads the bundled effects folder, saved selection, sticker placement (shared)
-    │   ├── EffectsProcessor.swift       Vision + Core Image proxy capturer delegate (shared)
-    │   ├── EffectsSheet.swift           Backgrounds and filters picker with a live preview
-    │   ├── FlutterBroadcastScreenCapturer.*  Screen capturer fed by the broadcast extension
-    │   └── FlutterSocketConnection*.*        Unix socket server + frame reader (from flutter-webrtc)
-    ├── WebRTCDemoMac/               macOS app
-    │   ├── WebRTCDemoMacApp.swift       @main: single window, Settings scene, Call menu
-    │   ├── MacCallView.swift            Call window: stage, draggable self view, chrome, auto-hide
-    │   ├── MacCallToolbar.swift         Glass toolbar with device menus and tooltips
-    │   ├── CallCommands.swift           Call menu and single-key shortcuts
-    │   ├── ScreenSharePicker.swift      Display/window picker with thumbnails (ScreenCaptureKit)
-    │   ├── ScreenShareCapturer.swift    SCStream -> RTCVideoSource
-    │   ├── FileVideoCapturer.swift      AVAssetReader -> RTCVideoSource, looping
-    │   ├── FloatingCallWindow.swift     Always-on-top mini call window (the Mac's PiP)
-    │   ├── MacGroupStage.swift          Group call grid, tiles, people list
-    │   ├── MacSettingsView.swift        Signaling and SFU server addresses
-    │   └── MacSupport.swift             Window helpers, device model, idle tracker
-    ├── WebRTCDemoScreenBroadcast/       ReplayKit upload extension
-    └── WebRTCDemoScreenBroadcastSetupUI/
+├── ios/
+│   ├── WebRTCDemo.xcodeproj         iOS app, broadcast extensions and Mac app
+│   ├── Packages/WebRTC/             Local Swift package: the webrtc-sdk/Specs WebRTC binary
+│   ├── WebRTCDemo/                  iOS app; files marked (shared) are also compiled into the Mac app
+│   │   ├── WebRTCDemoApp.swift          @main SwiftUI app: lobby, call as a full screen cover
+│   │   ├── LobbyView.swift              Room id, E2EE toggle, join button (shared)
+│   │   ├── CallViewModel.swift          @Observable call state, owns LocalMedia + the 1:1 or group engine (shared)
+│   │   ├── CallView.swift               iOS call screen: remote stage, local PiP, top bar
+│   │   ├── CallOverlays.swift           Room pill, status chips, waiting card, recent messages (shared)
+│   │   ├── CallControls.swift           Glass buttons (shared), iOS toolbar and "More" sheet
+│   │   ├── ChatView.swift               Chat sheet / side panel (shared)
+│   │   ├── PeerPlaceholderView.swift    Blurred last frame + speaking avatar (shared)
+│   │   ├── VideoView.swift              RTCMTLVideoView wrapper (UIKit and AppKit), FrameSnapshotter (shared)
+│   │   ├── PictureInPicture.swift       System PiP: AVSampleBufferDisplayLayer renderer
+│   │   ├── LocalMedia.swift             Factory, tracks, capturers, effects; used by both engines (shared)
+│   │   ├── PeerConnectionClient.swift   class WebRTCClient: the 1:1 engine (shared)
+│   │   ├── SignalingSocket.swift        JSON over URLSessionWebSocketTask; used by both engines (shared)
+│   │   ├── GroupCallClient.swift        Group engine: SFU WebSocket, publish + subscribe PeerConnections (shared)
+│   │   ├── SFUServer.swift              SFU address: normalize, save (shared)
+│   │   ├── GroupCallView.swift          iOS group call screen: participant grid, people sheet
+│   │   ├── FrameEncryption.swift        E2EE key provider and frame cryptors; used by both engines (shared)
+│   │   ├── EffectsCatalog.swift         Reads the bundled effects folder, saved selection, sticker placement (shared)
+│   │   ├── EffectsProcessor.swift       Vision + Core Image proxy capturer delegate (shared)
+│   │   ├── EffectsSheet.swift           Backgrounds and filters picker with a live preview
+│   │   ├── FlutterBroadcastScreenCapturer.*  Screen capturer fed by the broadcast extension
+│   │   └── FlutterSocketConnection*.*        Unix socket server + frame reader (from flutter-webrtc)
+│   ├── WebRTCDemoMac/               macOS app
+│   │   ├── WebRTCDemoMacApp.swift       @main: single window, Settings scene, Call menu
+│   │   ├── MacCallView.swift            Call window: stage, draggable self view, chrome, auto-hide
+│   │   ├── MacCallToolbar.swift         Glass toolbar with device menus and tooltips
+│   │   ├── CallCommands.swift           Call menu and single-key shortcuts
+│   │   ├── ScreenSharePicker.swift      Display/window picker with thumbnails (ScreenCaptureKit)
+│   │   ├── ScreenShareCapturer.swift    SCStream -> RTCVideoSource
+│   │   ├── FileVideoCapturer.swift      AVAssetReader -> RTCVideoSource, looping
+│   │   ├── FloatingCallWindow.swift     Always-on-top mini call window (the Mac's PiP)
+│   │   ├── MacGroupStage.swift          Group call grid, tiles, people list
+│   │   ├── MacSettingsView.swift        Signaling and SFU server addresses
+│   │   └── MacSupport.swift             Window helpers, device model, idle tracker
+│   ├── WebRTCDemoScreenBroadcast/       ReplayKit upload extension
+│   └── WebRTCDemoScreenBroadcastSetupUI/
+└── windows/
+    ├── native/RtcShim/                C shim over libwebrtc (CMake): rtc_shim.dll
+    │   ├── include/rtc_shim.h           The whole C API: handles, callbacks, UTF-8 strings
+    │   ├── src/shim_peer.cpp            Peer connection, SDP/ICE, codec preference, data channel, frame cryptors, stats
+    │   ├── src/shim_media.cpp           Devices, camera/desktop/custom sources, BGRA sinks, screen/window list
+    │   ├── src/shim_file_source_win.cpp Video file source (Media Foundation)
+    │   ├── tests/loopback.cpp           Two peers in one process: E2EE, frames, chat (runs on Linux too)
+    │   └── libwebrtc.lock.json          Pinned release + SHA-256 per asset
+    ├── models/                        selfie_segmenter, face_detector, face_landmarks_detector (.onnx), convert.sh
+    ├── src/WebRtcDemo.Interop/        LibraryImport bindings, SafeHandles, UnmanagedCallersOnly callbacks
+    ├── src/WebRtcDemo.Effects/        No UI: catalog, sticker placement, ONNX models, CPU compositing
+    ├── src/WebRtcDemo.Core/           No UI dependency, unit tested on any OS
+    │   ├── Signaling/                     JSON WebSocket, 1:1 messages, server health probe
+    │   ├── Group/                         Group engine: SFU messages, GroupCallClient, SDP mid/msid map, grid, fit, speaker
+    │   ├── Call/CallViewModel.cs          Call state machine for 1:1 and group (same flow as web/iOS)
+    │   ├── Media/NativeCallMedia.cs       Devices, 1:1 peer connection or publish + subscribe, track switching, E2EE
+    │   └── Lobby/LobbyViewModel.cs        Room id, E2EE switch, 1:1 / group mode, server addresses
+    ├── src/WebRtcDemo.App/            WinUI 3 app (UI in C#, no XAML pages)
+    │   ├── Views/                         Lobby, call screen, group stage and tiles, people flyout, chat, effects, share picker
+    │   └── Video/                         SwapChainPanel + D3D11 renderer
+    └── tests/WebRtcDemo.Core.Tests/   xUnit v3: state machine, signaling, live server, native loopback
 ```
 
 ---
@@ -598,6 +621,32 @@ The Mac app (`ios/WebRTCDemoMac`) is a native SwiftUI app, with AppKit where Swi
 
 ---
 
+## 7c. Windows client
+
+The Windows client is WinUI 3 on .NET 10. libwebrtc comes from the prebuilt [webrtc-sdk/libwebrtc](https://github.com/webrtc-sdk/libwebrtc) release (m150, the same branch as the Android and Apple SDKs). Its API is C++ classes (virtual methods, `scoped_refptr`, observer interfaces), so C# cannot call it directly; a small C shim exposes a flat API:
+
+```mermaid
+flowchart LR
+    UI["WebRtcDemo.App<br/>WinUI 3 views"] --> VM["WebRtcDemo.Core<br/>CallViewModel, SignalingClient, GroupCallClient"]
+    VM --> IO["WebRtcDemo.Interop<br/>LibraryImport + SafeHandles"]
+    IO --> SHIM["rtc_shim.dll<br/>flat C API"]
+    SHIM --> LW["libwebrtc.dll<br/>webrtc-sdk m150"]
+    VM --> WS["ClientWebSocket<br/>signaling-server or sfu-server"]
+```
+
+- **C shim (`rtc_shim.dll`).** Built with MSVC and the static CRT to match `libwebrtc.dll`, with `RTC_DESKTOP_DEVICE` (the define changes the factory's vtable). It exports opaque handles with explicit release, UTF-8 strings, and callbacks with a `void* user`. Async libwebrtc calls complete through callbacks, and a closed peer connection rejects calls instead of crashing. Video comes out of sinks as BGRA, already rotated and optionally downscaled.
+- **Interop.** One `SafeHandle` per native object; callbacks are `UnmanagedCallersOnly` functions that look their target up by id, so nothing is pinned with a GCHandle and nothing unwinds into native code.
+- **Signaling.** One JSON WebSocket per call (`WebSocketMessageSocket`, the protocol of [section 3](#3-signaling-server)), with no reconnect: a closed socket ends the call, as on the other clients. The lobby polls `GET /` of the selected server every 5 s for its status. Group calls use the same socket class towards `sfu-server` ([section 12.11](#1211-windows-client--group-mode)).
+- **Media.** The video sender is created once per peer connection, and its track is swapped between camera, screen/window and video file (section 8), which keeps the sender's frame cryptor. Without a camera a placeholder track keeps the video sender, so presenting later needs no renegotiation. Turning the camera off follows the 300 ms rule in section 4.
+- **E2EE.** The key provider options in section 9.3; VP8 is preferred on every transceiver when E2EE is on (section 9.4). The offerer generates the 32-byte key and sends it before the offer.
+- **Rendering.** Each video view is a `SwapChainPanel` with a D3D11 composition swap chain the size of the frame; frames are uploaded straight into the back buffer and the swap chain's matrix scales to fit or fill. Frames from WebRTC threads go into a one-slot mailbox that the UI thread draws on the next composition tick.
+- **Sharing.** Screens and windows use libwebrtc's desktop capturer and media list, with live thumbnails in the picker; video files are decoded with Media Foundation into I420 frames for a custom source, paced by their timestamps and looped.
+- **Effects.** The camera track gets a second sink whose frames go through `EffectsProcessor` (section 10) into a custom source; that track replaces the camera's on the sender, the same swap as for sharing.
+- **Picture-in-picture.** The window switches to the `CompactOverlay` presenter: a small always-on-top window with the remote video and mute, camera, back and leave buttons. In a group call it shows the active speaker.
+- **UI.** Fluent with a Mica backdrop and an extended title bar; the views are built in C# rather than XAML pages, so the whole app type-checks with `dotnet build` on any OS.
+
+---
+
 ## 8. Switching media sources
 
 Each platform switches between camera, screen and video file in a different way. This matters for E2EE, because a cryptor/transform is bound to one `RtpSender` / `RtpReceiver`.
@@ -725,7 +774,7 @@ Effects only process **camera** frames; screen share and file share are sent unt
 
 ### Shared assets
 
-The `effects/` folder at the repository root is the single source for every app: Vite imports it with `import.meta.glob`, Android copies it into the APK's `assets/effects` with a generated asset source (`copyEffects` in `app/build.gradle.kts`), and iOS and macOS bundle it as a folder reference.
+The `effects/` folder at the repository root is the single source for every app: Vite imports it with `import.meta.glob`, Android copies it into the APK's `assets/effects` with a generated asset source (`copyEffects` in `app/build.gradle.kts`), iOS and macOS bundle it as a folder reference, and Windows links it into the app output (`WebRtcDemo.App.csproj`).
 
 - `backgrounds.json` lists pictures and videos (`id`, `name`, `type`, `file`, `thumbnail`). It is written by `tools/prepare_effects.py` from `effects-source/`. Blur and none are built into each app.
 - `stickers.json` lists stickers. Sizes and offsets are in units of the distance between the eyes, measured from the `anchor` (`eyes`, `nose` or `mouth`), with positive `offsetY` up the face. `height` is optional and stretches the artwork.
@@ -733,7 +782,7 @@ The `effects/` folder at the repository root is the single source for every app:
 
 ### Sticker placement
 
-Every platform turns its face landmarks into four points (both eye centers, nose tip, mouth center) and runs the same placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`):
+Every platform turns its face landmarks into four points (both eye centers, nose tip, mouth center) and runs the same placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`, `StickerPlacement.cs`):
 
 - "Right" runs from one eye to the other and "up" from the mouth to the eyes, so the sticker follows a tilted head. The eye order comes from that up direction, so it does not matter which eye a detector calls left.
 - The unit is the larger of the eye distance and eyes-to-mouth / 1.2, so stickers do not shrink when the head turns sideways.
@@ -741,17 +790,17 @@ Every platform turns its face landmarks into four points (both eye centers, nose
 
 ### Starting with an effect on
 
-The selection is saved (`localStorage`, `SharedPreferences`, `UserDefaults`). When a call starts with a saved effect, the camera frames are held (web: the first `replaceTrack` waits; Android, iOS and macOS: the processor drops camera frames) until the effect is loaded and the first mask is ready, so the peer never sees the real background first. If an effect cannot be loaded, the previous choice comes back with a toast.
+The selection is saved (`localStorage`, `SharedPreferences`, `UserDefaults`, Windows `settings.json`). When a call starts with a saved effect, the camera frames are held (web: the first `replaceTrack` waits; Android, iOS, macOS and Windows: the processor drops camera frames) until the effect is loaded and the first mask is ready, so the peer never sees the real background first. If an effect cannot be loaded, the previous choice comes back with a toast. On Windows, an effect that loaded but whose model fails during the call never falls back to the raw camera: frames stay held, the failing model is recreated on the CPU, and the same choice is loaded once more. If that also fails, the camera turns off the normal way (media state first, camera closed 300 ms later) with the same message, and the saved choice is kept.
 
-| | Web | Android | iOS |
-|---|---|---|---|
-| Person mask | MediaPipe `ImageSegmenter` (`selfie_segmenter`), `categoryMask` | MediaPipe `tasks-vision` 1.0.0 (`selfie_segmenter`), confidence mask, 256 px input | Vision `VNGeneratePersonSegmentationRequest` (`.balanced`), every 2nd frame |
-| Face points | MediaPipe `FaceLandmarker` | MediaPipe `FaceLandmarker` (`face_landmarker.task`), 384 px input | Vision `VNDetectFaceLandmarksRequest`, every 2nd frame |
-| Blur | `ctx.filter = blur()` (downscaled draw on Safari) | downscale + separable Gaussian in two FBOs | `CIGaussianBlur` |
-| Video background | hidden muted `<video>` | `MediaPlayer` into an OES `SurfaceTexture` | `AVPlayer` + `AVPlayerItemVideoOutput` |
-| Compositing | 2D canvas | GLES fragment shader on the camera texture, sticker quad with premultiplied alpha | `CIBlendWithMask`, sticker `composited(over:)`, Metal `CIContext` |
-| Output | `canvas.captureStream(30)` + `replaceTrack` | `TextureBuffer` frame (rotation 0) | `RTCCVPixelBuffer` (BGRA), original rotation |
-| Hook point | separate `MediaStream` | `VideoSource.setVideoProcessor()` | proxy `RTCVideoCapturerDelegate` |
+| | Web | Android | iOS | Windows |
+|---|---|---|---|---|
+| Person mask | MediaPipe `ImageSegmenter` (`selfie_segmenter`), `categoryMask` | MediaPipe `tasks-vision` 1.0.0 (`selfie_segmenter`), confidence mask, 256 px input | Vision `VNGeneratePersonSegmentationRequest` (`.balanced`), every 2nd frame | `selfie_segmenter.onnx`, 256 px input, on its own thread whenever it is idle, blended 70 % with the previous mask |
+| Face points | MediaPipe `FaceLandmarker` | MediaPipe `FaceLandmarker` (`face_landmarker.task`), 384 px input | Vision `VNDetectFaceLandmarksRequest`, every 2nd frame | `face_detector.onnx` (BlazeFace short range, 128 px) then `face_landmarks_detector.onnx` (256 px, tracked from the last landmarks) |
+| Blur | `ctx.filter = blur()` (downscaled draw on Safari) | downscale + separable Gaussian in two FBOs | `CIGaussianBlur` | downscale until the radius is 3 px, separable Gaussian, scale back |
+| Video background | hidden muted `<video>` | `MediaPlayer` into an OES `SurfaceTexture` | `AVPlayer` + `AVPlayerItemVideoOutput` | the shim's Media Foundation file source (looped) into a BGRA sink |
+| Compositing | 2D canvas | GLES fragment shader on the camera texture, sticker quad with premultiplied alpha | `CIBlendWithMask`, sticker `composited(over:)`, Metal `CIContext` | C# on the CPU: smoothstep mask edge, cover-scaled background, premultiplied sticker |
+| Output | `canvas.captureStream(30)` + `replaceTrack` | `TextureBuffer` frame (rotation 0) | `RTCCVPixelBuffer` (BGRA), original rotation | I420 into a custom video source (frames are upright already) |
+| Hook point | separate `MediaStream` | `VideoSource.setVideoProcessor()` | proxy `RTCVideoCapturerDelegate` | second sink on the camera track, effects track swapped onto the sender |
 
 macOS runs the iOS pipeline unchanged, apart from the cadence and mirroring described under macOS pipeline.
 
@@ -790,6 +839,26 @@ While a frame is being processed, new camera frames are dropped, so the capture 
 ### macOS pipeline
 
 The Mac app compiles the iOS `EffectsCatalog`, `EffectsProcessor` and `EffectsSheet`, so the pipeline above is the same: `RTCCameraVideoCapturer` feeds `EffectsProcessor`, while the ScreenCaptureKit and file capturers feed the `RTCVideoSource` directly and are never processed. Mac cameras deliver landscape frames with rotation 0. The capture connection is pinned to unmirrored, so the peer always gets unmirrored frames (stickers the right way round); only the local views mirror. Vision runs on every 2nd frame as on iOS, and the Mac backs off to every 3rd or 4th frame when a pass averages over 20 or 30 ms (Intel Macs have no Neural Engine); the first run of each request, which loads its model, is not timed.
+
+### Windows pipeline
+
+```mermaid
+flowchart LR
+    CAM["camera track<br/>BGRA sink, up to 720p"] --> EP["EffectsProcessor<br/>(compositor thread, one pending frame)"]
+    EP -- "1. 512 px copy<br/>(only when a model is idle)" --> SEG["SelfieSegmenter<br/>(own thread)"]
+    EP -- "1." --> FL["FaceLandmarker<br/>(own thread)"]
+    SEG -- "2. latest mask" --> EP
+    FL -- "2. latest face points" --> EP
+    BG["picture / blur /<br/>NativeBackgroundVideo"] --> EP
+    EP -- "3. composite, sticker,<br/>BGRA to I420" --> SRC["custom video source<br/>effects track"]
+    SRC --> SND["video sender (replaces the camera track)<br/>+ local preview"]
+    ORT["ONNX Runtime via Windows ML<br/>GPU / NPU, CPU fallback"] -.-> SEG
+    ORT -.-> FL
+```
+
+The models are MediaPipe's, converted to ONNX by `windows/models/convert.sh` (pinned tf2onnx, byte-reproducible, checked against `SHA256SUMS`). At launch the app registers the execution providers Windows ML certifies for the PC and asks for the GPU; without them, or if a provider rejects a model, the session runs on the CPU. While a model is busy, frames reuse its previous result, so a slow model lowers the update rate of the mask, not the frame rate.
+
+Switching cameras, turning the camera back on and returning from a presentation all invalidate the last mask and face points (and drop any frame still waiting from before) before new camera frames reach the processor. On hang-up the processor's camera sink is detached first, and the processor is disposed on the thread pool, since joining its model threads can take a moment after a first GPU run.
 
 ### Web pipeline
 
@@ -1148,6 +1217,17 @@ The Mac app compiles the iOS engine unchanged (`GroupCallClient`, `LocalMedia`, 
 - **Floating window.** `P` or minimizing opens the floating panel with the featured participant: the active speaker, else the first camera, else the first person.
 - **Ending.** A fatal `error` or a closed socket shows "Call ended" with the reason and returns to the lobby, as in 1:1 calls.
 
+### 12.11 Windows client — group mode
+
+The Windows engine is C# in `WebRtcDemo.Core/Group` over the C shim, and joins as `Windows`. It follows the same rules as the iOS and Android engines:
+
+- **Shim.** ABI 3 adds what a group needs: `rtc_pc_add_transceiver` (kind, direction, optional track and stream id), `rtc_pc_get_transceivers` (mid, direction, receiver id), `on_track` with the remote stream id, `rtc_pc_attach_receiver_cryptors`, and `rtc_pc_get_receiver_audio_level`. A receiver whose transceiver becomes active again is reported again with a new track handle.
+- **Publish PC.** Send-only audio and video transceivers whose senders are the ones the 1:1 code swaps tracks on, so the camera, screen or window share, video file and effects switch exactly as in [section 8](#8-switching-media-sources). Sender cryptors and VP8 first. `GroupCallClient` sends the media state, then the publish offer.
+- **Subscribe PC.** Server offers are answered one at a time: set the remote description, attach receiver cryptors, map receivers, answer, map again. `SdpMedia` reads each m-section's `mid` and `msid` (with the `ssrc … msid:` fallback), and `ReceiverMap` maps transceiver mid → msid → participant, which covers m-lines the SFU reuses. Remote candidates wait per PC until that PC has a description.
+- **Active speaker.** The audio level of each participant's receivers every 300 ms; the loudest above 0.03 is held for 1.2 s.
+- **UI.** The lobby has a *1:1 call / Group call (SFU)* selector with its own saved address (default port 4001 on the signaling host). `GroupStage` lays out `GroupTile`s with `GroupGrid` (largest tiles, last row centred) between the top bar and the toolbar, which stays visible. A tile fills by default and fits while that participant presents; double-click switches, animated, until they start or stop presenting (`TileFit`). Labels `name · short id` start with one animated status mark (red mic-off, presenting, or a green dot while live, as on the web); a speaking ring and the avatar when there is no video. The self view's `You` pill has the red mic-off badge in 1:1 and group calls. A people chip opens `PeopleFlyout` (you first and highlighted); the self view shows `You · Windows · <short id>`. More has Mute everyone and Hide everyone's video, which also apply to later joiners. `F` is off; `P` opens the compact overlay with the featured participant, and it closes when the last person leaves.
+- **Ending.** A fatal `error`, a closed socket, a failed peer connection or a missing room key ends the call; the lobby shows the reason.
+
 ---
 
 ## 13. Versions and build
@@ -1156,8 +1236,11 @@ The Mac app compiles the iOS engine unchanged (`GroupCallClient`, `LocalMedia`, 
 |---|---|---|
 | webrtc-sdk Android | `io.github.webrtc-sdk:android:150.7871.01` | `android/app/build.gradle.kts` |
 | webrtc-sdk iOS / macOS | `webrtc-sdk/Specs` `150.7871.01` binary (`WebRTC.xcframework.zip`, checksum pinned), product `WebRTC`, through a local package because the Specs manifest for that release doesn't resolve | `ios/Packages/WebRTC/Package.swift` |
+| libwebrtc Windows | `libwebrtc.m150.7871.03` (webrtc-sdk/libwebrtc release) | `windows/native/RtcShim/libwebrtc.lock.json`, SHA-256 pinned |
+| Windows App SDK | `2.5.1`, .NET `10`, CommunityToolkit.Mvvm `8.4.2`, Vortice `3.8.3` | `windows/Directory.Packages.props`; unpackaged, self-contained, x64 and arm64 |
 | MediaPipe Android | `com.google.mediapipe:tasks-vision:1.0.0` | models in `android/app/src/main/assets/` (`selfie_segmenter.tflite`, `face_landmarker.task`, stored uncompressed) |
 | MediaPipe Web | `@mediapipe/tasks-vision` | models loaded from `storage.googleapis.com` |
+| Windows effects | ONNX Runtime managed `1.24.4` with Windows ML (`Microsoft.Windows.AI.MachineLearning` `2.1.74` from Windows App SDK 2.5.1), StbImageSharp `2.30.16`; models converted with tf2onnx `1.16.1`, opset 17 | `windows/Directory.Packages.props`, `windows/models/convert.sh` |
 | Jetpack Compose | BOM `2026.06.01`, `material3` `1.5.0-alpha18` | Material 3 Expressive is only in the 1.5 alphas. Newer Compose BOMs need AGP 9.1 and compileSdk 37 |
 | Android Gradle Plugin | `8.13.2`, Gradle `9.5.1`, Kotlin `2.3.0` | compileSdk 36, minSdk 24 |
 | iOS / macOS deployment target | 26.0 | Liquid Glass needs the 26 releases; build with Xcode 26 |
@@ -1170,6 +1253,7 @@ sfu-server:        go run .   (optional, group calls)          (TCP + UDP 4001)
 web:               npm install && npm run dev                 (http://localhost:5173)
 android:           ./gradlew :app:assembleDebug
 ios / macOS:       open ios/WebRTCDemo.xcodeproj; scheme WebRTCDemo (iPhone) or WebRTCDemoMac (My Mac)
+windows:           cd windows && ./native/RtcShim/scripts/build-shim.ps1, then dotnet run --project src/WebRtcDemo.App -p:Platform=x64
 ```
 
 ---
@@ -1185,4 +1269,6 @@ ios / macOS:       open ios/WebRTCDemo.xcodeproj; scheme WebRTCDemo (iPhone) or 
 - **E2EE key goes through the signaling server in plain form.** Fine for a demo; a real app should use a key agreement (e.g. ECDH) or a passphrase shared out of band.
 - **E2EE is chosen in the lobby** and cannot be toggled during a call; both peers must choose the same setting.
 - **macOS screen sharing needs Screen Recording permission**, granted once in System Settings › Privacy & Security; the app has to be relaunched after granting it.
+- **Windows composites effects on the CPU.** The models can use the GPU or NPU through Windows ML, but the blending, blur and I420 conversion run in C# on one thread (about 13 ms per 720p frame on one server core), so a slow PC sends effects at a lower frame rate.
+- **Windows video files** play only in formats Media Foundation can decode on that PC.
 - **iOS always sends VP8.** It is encoded in software, so it uses more CPU and battery than hardware H264; this is what keeps screen sharing alive in the background.

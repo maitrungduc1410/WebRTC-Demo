@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- WinUI 3, unpackaged and self-contained: the output folder runs as is on Windows 10 1809+.
+       The UI is built in C# (no XAML pages), so it compiles anywhere with EnableWindowsTargeting
+       (see windows/README.md); producing a runnable app needs the Windows build tools. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>WebRtcDemo.App</RootNamespace>
+    <AssemblyName>WebRtcDemo</AssemblyName>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <Platforms>x64;ARM64</Platforms>
+    <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(Platform)' != 'ARM64'">win-x64</RuntimeIdentifier>
+    <!-- Internal UI classes are created in code only. -->
+    <NoWarn>$(NoWarn);CA1812;CA2000;CA1001;CA1515</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.DXGI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../WebRtcDemo.Core/WebRtcDemo.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The window and title bar icon (ApplicationIcon only covers the .exe), the backgrounds and
+       stickers shared with the other apps (repository root effects/), and the effects models. -->
+  <ItemGroup>
+    <None Include="Assets/AppIcon.ico;Assets/AppIcon.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../../effects/**/*" Exclude="../../../effects/**/.*;../../../effects/**/.*/**" Link="effects/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    <None Include="../../models/*.onnx;../../models/LICENSE;../../models/NOTICE.txt" Link="models/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <!-- rtc_shim.dll and libwebrtc.dll from native/RtcShim/scripts/build-shim.ps1. -->
+  <PropertyGroup>
+    <RtcShimArch Condition="'$(Platform)' == 'ARM64'">arm64</RtcShimArch>
+    <RtcShimArch Condition="'$(Platform)' != 'ARM64'">x64</RtcShimArch>
+    <RtcShimDir>$(RtcShimInstallRoot)$(RtcShimArch)/</RtcShimDir>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(RtcShimDir)')">
+    <None Include="$(RtcShimDir)*.dll;$(RtcShimDir)*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="%(Filename)%(Extension)" Visible="false" />
+  </ItemGroup>
+  <Target Name="RequireRtcShim" BeforeTargets="Build" Condition="$([MSBuild]::IsOSPlatform('Windows')) and !Exists('$(RtcShimDir)rtc_shim.dll')">
+    <Error Text="$(RtcShimDir)rtc_shim.dll not found. Run native/RtcShim/scripts/build-shim.ps1 -Arch $(RtcShimArch) first." />
+  </Target>
+
+</Project>

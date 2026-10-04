@@ -1,8 +1,8 @@
 # WebRTC-Demo
 
 <div align="center">
-<h3>A comprehensive 1:1 WebRTC demo on Web, Android, iOS and macOS</h3>
-<p>Video calls, chat, screen and file sharing, backgrounds and face filters, and end-to-end encryption, with native UIs built in Jetpack Compose (Material 3 Expressive) and SwiftUI (Liquid Glass).</p>
+<h3>A comprehensive 1:1 WebRTC demo on Web, Android, iOS, macOS and Windows</h3>
+<p>Video calls, chat, screen and file sharing, backgrounds and face filters, and end-to-end encryption, with native UIs built in Jetpack Compose (Material 3 Expressive), SwiftUI (Liquid Glass) and WinUI 3 (Fluent).</p>
 </div>
 
 # Screenshots
@@ -40,22 +40,22 @@ _Recording: `images/demo-ui.gif`, joining a room, dragging the picture-in-pictur
 
 # Features
 
-| Feature                                                    | Web | iOS | Android | macOS |
-|------------------------------------------------------------|-----|-----|---------|-------|
-| 1:1 video call, peer to peer                               | ✅   | ✅   | ✅       | ✅     |
-| Group call through your own SFU (optional)                 | ✅   | ✅   | ✅       | ✅     |
-| Chat over a data channel                                   | ✅   | ✅   | ✅       | ✅     |
-| Share your screen or a video file                          | ✅   | ✅   | ✅       | ✅     |
-| Virtual backgrounds: blur, pictures and videos             | ✅   | ✅   | ✅       | ✅     |
-| Face-tracked stickers                                      | ✅   | ✅   | ✅       | ✅     |
-| End-to-end encryption, 1:1 and group                       | ✅   | ✅   | ✅       | ✅     |
-| Your own microphone level on your video (three bars)       | ✅   | ✅   | ✅       | ✅     |
-| Picture-in-picture (the call in a floating window)         | ✅   | ✅¹  | ✅       | ✅²    |
+| Feature                                                    | Web | iOS | Android | macOS | Windows |
+|------------------------------------------------------------|-----|-----|---------|-------|---------|
+| 1:1 video call, peer to peer                               | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Group call through your own SFU (optional)                 | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Chat over a data channel                                   | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Share your screen or a video file                          | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Virtual backgrounds: blur, pictures and videos             | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Face-tracked stickers                                      | ✅   | ✅   | ✅       | ✅     | ✅       |
+| End-to-end encryption, 1:1 and group                       | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Your own microphone level on your video (three bars)       | ✅   | ✅   | ✅       | ✅     | ✅       |
+| Picture-in-picture (the call in a floating window)         | ✅   | ✅¹  | ✅       | ✅²    | ✅²      |
 
 ¹ On iOS, picture-in-picture is available in 1:1 calls only.
-² An always-on-top floating window on the Mac.
+² An always-on-top floating window on the Mac and the compact overlay window on Windows.
 
-Native clients use [webrtc-sdk](https://github.com/webrtc-sdk) `150.7871.01` (Android `io.github.webrtc-sdk:android`, iOS and macOS the [`webrtc-sdk/Specs`](https://github.com/webrtc-sdk/Specs) binary through the local Swift package `ios/Packages/WebRTC`).
+Native clients use [webrtc-sdk](https://github.com/webrtc-sdk) `150.7871.01` (Android `io.github.webrtc-sdk:android`, iOS and macOS the [`webrtc-sdk/Specs`](https://github.com/webrtc-sdk/Specs) binary through the local Swift package `ios/Packages/WebRTC`). The Windows client uses the prebuilt [webrtc-sdk/libwebrtc](https://github.com/webrtc-sdk/libwebrtc) release `libwebrtc.m150.7871.03` (same m150 branch) through a small C shim.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the clients work, with diagrams.
 
@@ -69,6 +69,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the signaling server and the clie
 | Android          | Kotlin, Jetpack Compose, Material 3 Expressive, MediaPipe |
 | iOS              | Swift, SwiftUI, Liquid Glass, Vision, Core Image |
 | macOS            | Swift, SwiftUI + AppKit, Liquid Glass, ScreenCaptureKit, Vision, Core Image (same Xcode project as iOS) |
+| Windows          | C# / .NET 10, WinUI 3 (Windows App SDK 2.5), CommunityToolkit.Mvvm, Direct3D 11 (Vortice), C shim over libwebrtc |
 
 # Disclaimer
 This is intended to show common use cases of WebRTC cross platforms and to give you some ideas, it may have bugs, use with caution!
@@ -80,6 +81,7 @@ This is intended to show common use cases of WebRTC cross platforms and to give 
 - Node.js 20.19+ for the signaling server and the web client (Vite 7 needs it)
 - Android: Android Studio with JDK 17+, a device on Android 7.0 (API 24) or newer
 - iOS / macOS: Xcode 26. iOS needs a device on **iOS 26** or newer, the Mac app needs **macOS 26** or newer (Liquid Glass needs the 26 releases). Dependencies come from Swift Package Manager; CocoaPods is no longer used
+- Windows: Windows 10 1809+ (11 for Mica), Visual Studio 2026 with the *WinUI application development* and *Desktop development with C++* workloads (they include the .NET 10 SDK and CMake)
 
 ## Start signaling server
 First you need to start the signaling server, Open terminal at `signaling-server` and run:
@@ -119,6 +121,15 @@ Open `ios/WebRTCDemo.xcodeproj` (there is no workspace and no `pod install` any 
 
 Open `ios/WebRTCDemo.xcodeproj`, pick the `WebRTCDemoMac` scheme and the `My Mac` destination, and run. It is a native SwiftUI/AppKit app (not Catalyst) that shares the call logic with the iOS app. The signaling and SFU server addresses are in **WebRTC Demo › Settings…** (⌘,); the defaults are `http://localhost:4000` and `http://localhost:4001`, so servers started on the same Mac work without changes. The first call asks for camera and microphone access; the first screen share asks for Screen Recording access in System Settings.
 
+### Windows
+
+From PowerShell, in `windows`:
+```
+./native/RtcShim/scripts/build-shim.ps1    # downloads libwebrtc (SHA-256 pinned), builds rtc_shim.dll
+dotnet run --project src/WebRtcDemo.App -p:Platform=x64
+```
+Or open `windows/WebRtcDemo.slnx` in Visual Studio and run the x64 or ARM64 configuration. In the lobby, open **Signaling server** and enter the address printed when you start the signaling server; the app remembers it (`%LOCALAPPDATA%\WebRtcDemo\settings.json`). The default is `http://localhost:4000`. For group calls, pick **Group call (SFU)** at the top of the lobby; its address is saved separately and defaults to port 4001 on the signaling host. See [windows/README.md](windows/README.md) for tests, publishing and troubleshooting.
+
 ## Group calls (optional)
 
 Everything above is enough for 1:1 calls. To call with more people, also start the SFU server. It needs [Go](https://go.dev/dl/) 1.24 or newer (an older Go downloads 1.24 by itself):
@@ -153,13 +164,13 @@ The web call screen follows the same layout in desktop and phone browsers, with 
 - On screens 1024 px and wider, chat opens as a side panel; on smaller screens it opens as a bottom sheet. On phones, "More" opens a sheet with the remaining options.
 - The picture-in-picture button opens the call in a floating window that stays on top of other tabs and apps. In Chrome and Edge it is a full mini call window (remote video, your video, mic, camera and hang-up buttons), and since Chrome 134 it opens by itself when you switch to another tab during a call. Other browsers float the remote video only.
 
-The macOS call window follows the web desktop layout:
+The macOS and Windows call windows follow the web desktop layout:
 
 - The video fills the window under the title bar. Move the pointer to show the controls; they hide after about four seconds without movement.
 - Toolbar buttons have tooltips with the same keyboard shortcuts as the web client: `M` microphone, `V` camera, `C` chat, `B` backgrounds and effects, `F` fit/fill, `P` floating window. In a group call, as on the web, `F` is off (double-click a tile instead), the controls stay visible, and the floating window shows whoever is speaking. On the Mac they are also in the **Call** menu (plus ⇧⌘S share, ⌘O share a video file, ⇧⌘E leave) and are off while you type in the chat.
 - Microphone, speaker and camera are chosen from the menus next to the microphone and camera buttons. Share opens a picker with live thumbnails of your screens and windows.
 - In wide windows chat opens as a side panel. Drag your self view to any corner; double-click the remote video to switch between fit and fill.
-- The floating window keeps the call on top of other apps with mute, camera, return and hang-up controls (an always-on-top panel). It also opens when you minimize the call window.
+- The floating window keeps the call on top of other apps with mute, camera, return and hang-up controls (an always-on-top panel on the Mac, the compact overlay window on Windows). On the Mac it also opens when you minimize the call window.
 
 ## Group call screen
 
@@ -167,8 +178,8 @@ In a group call every client shows the other participants in a grid, with the sa
 
 - Each tile is labelled with the participant's platform and a short id (for example `Android · 3f2a1c`), shows a mic-off icon when their microphone is off, and the avatar placeholder when their camera is off.
 - A green ring marks who is speaking, from the received audio level.
-- Tap the people count next to the timer to see everyone in the room, with your own label first and highlighted, so you can find your tile on the other devices. On web it opens a dialog, and your label is also shown next to "You" on your own tile, as on macOS.
-- People who share their screen are shown fit (whole frame); everyone else fills the tile. Double-tap a tile to switch (double-click on web and macOS).
+- Tap the people count next to the timer to see everyone in the room, with your own label first and highlighted, so you can find your tile on the other devices. On web it opens a dialog, and your label is also shown next to "You" on your own tile, as on macOS and Windows.
+- People who share their screen are shown fit (whole frame); everyone else fills the tile. Double-tap a tile to switch (double-click on web, macOS and Windows).
 - Your own video stays the draggable picture-in-picture tile. While you are alone, the room id card is shown.
 - Chat goes through the SFU server and shows who sent each message. In More, muting peer audio or hiding peer video applies to everyone.
 - On web and iOS, group tiles show the avatar without the blurred last frame (Android keeps it). On iOS, the system picture-in-picture window is only available in 1:1 calls.
@@ -180,6 +191,14 @@ In a group call every client shows the other participants in a grid, with the sa
 In Xcode use **File › Packages › Reset Package Caches**, then **Resolve Package Versions**.
 
 WebRTC comes from the local package `ios/Packages/WebRTC`, not straight from [`webrtc-sdk/Specs`](https://github.com/webrtc-sdk/Specs). The Specs manifest for `150.7871.01` declares `swift-tools-version:5.9` but uses `.visionOS(.v26)`, which only exists from PackageDescription 6.2, so Xcode fails with "'v26' is unavailable" and "Missing package product 'WebRTC'". The local package downloads the same `WebRTC.xcframework.zip` with the same checksum. To upgrade WebRTC, change the URL and checksum in `ios/Packages/WebRTC/Package.swift` (the checksum is the `sha256` of the zip), or switch back to the Specs package once a release has a valid manifest.
+
+## Windows - "rtc_shim.dll or libwebrtc.dll is missing"
+
+Run `windows/native/RtcShim/scripts/build-shim.ps1` (it builds for this PC's architecture; `-Arch arm64` or `-Arch x64` for the other) before building the app.
+
+## Windows - no camera or microphone
+
+Settings → Privacy & security → Camera / Microphone → turn on *Let desktop apps access…*.
 
 ## iOS - No audio in calls, video works
 
@@ -253,16 +272,16 @@ Details, diagrams and the signaling protocol are in [ARCHITECTURE.md, section 12
 
 Effects only apply to the camera, not to screen share or file share.
 
-| | Web | Android | iOS |
-|---|---|---|---|
-| Person mask | MediaPipe `ImageSegmenter` (`selfie_segmenter`) | MediaPipe `tasks-vision` (`selfie_segmenter`) | Vision `VNGeneratePersonSegmentationRequest` |
-| Face points | MediaPipe `FaceLandmarker` | MediaPipe `FaceLandmarker` (`face_landmarker.task`) | Vision `VNDetectFaceLandmarksRequest` |
-| Compositing | canvas 2D | GLES shaders on the camera texture | Core Image on a Metal `CIContext` |
-| Video backgrounds | hidden `<video>` | `MediaPlayer` into an OES texture | `AVPlayer` + `AVPlayerItemVideoOutput` |
+| | Web | Android | iOS | Windows |
+|---|---|---|---|---|
+| Person mask | MediaPipe `ImageSegmenter` (`selfie_segmenter`) | MediaPipe `tasks-vision` (`selfie_segmenter`) | Vision `VNGeneratePersonSegmentationRequest` | `selfie_segmenter` as ONNX, ONNX Runtime via Windows ML |
+| Face points | MediaPipe `FaceLandmarker` | MediaPipe `FaceLandmarker` (`face_landmarker.task`) | Vision `VNDetectFaceLandmarksRequest` | `face_landmarker` (detector + mesh) as ONNX, same runtime |
+| Compositing | canvas 2D | GLES shaders on the camera texture | Core Image on a Metal `CIContext` | C# on the CPU, into a custom I420 source |
+| Video backgrounds | hidden `<video>` | `MediaPlayer` into an OES texture | `AVPlayer` + `AVPlayerItemVideoOutput` | Media Foundation (the shim's file source) |
 
-The macOS app compiles the iOS effects code (Vision + Core Image), so it offers the same backgrounds and stickers.
+The macOS app compiles the iOS effects code (Vision + Core Image), so it offers the same backgrounds and stickers. The Windows client runs the same MediaPipe models as Android, converted to ONNX (`windows/models/convert.sh`), with Windows ML picking the GPU or NPU when it can and the CPU otherwise.
 
-On the Mac the picker is a side panel in place of the chat (420 pt wide, like the web sheet), opened from its toolbar button, the menu (Call ▸ Backgrounds and Effects…) or `B`, and closed with Esc, its close button or the toolbar button. As on the web, `B` only opens it, `C` shows or hides the chat, and `F` and `P` work once the other person has joined. Item names show as tooltips, and the panel closes and is unavailable while you present.
+On the desktop apps the picker is a side panel in place of the chat (420 pt wide on the Mac, like the web sheet), opened from its toolbar button, the menu (Call ▸ Backgrounds and Effects… on the Mac, More on Windows) or `B`, and closed with Esc, its close button or the toolbar button. As on the web, `B` only opens it, `C` shows or hides the chat, and `F` and `P` work once the other person has joined. Item names show as tooltips, and the panel closes and is unavailable while you present.
 
 ### Adding backgrounds
 
@@ -278,14 +297,15 @@ Stickers are listed in `effects/stickers.json`. Sizes and offsets are measured i
 
 - Stickers are based on [Noto Emoji](https://github.com/googlefonts/noto-emoji) (Apache License 2.0, see [`effects/stickers/LICENSE`](effects/stickers/LICENSE)). The headphones were reshaped and recoloured.
 - Background pictures and videos come from [Pexels](https://www.pexels.com) and [Pixabay](https://pixabay.com/), under the [Pexels license](https://www.pexels.com/license/) and the [Pixabay Content License](https://pixabay.com/service/license-summary/).
-- The MediaPipe models (`selfie_segmenter`, `face_landmarker`) are bundled with the Android app and loaded from MediaPipe's model storage on the web; see their model cards for terms.
+- The MediaPipe models (`selfie_segmenter`, `face_landmarker`) are bundled with the Android app, converted to ONNX for the Windows app (`windows/models`, Apache License 2.0, see its `NOTICE.txt`), and loaded from MediaPipe's model storage on the web; see their model cards for terms.
 
 ## App icon
 
-The iOS, macOS and Android apps share one icon, drawn by [`tools/make_app_icons.py`](tools/make_app_icons.py): an indigo-to-violet plate, a frosted glass disc and a white camera. Run `python3 tools/make_app_icons.py` (needs `pip install pillow numpy`) after changing its colors or shapes; it rewrites:
+The iOS, macOS, Android and Windows apps share one icon, drawn by [`tools/make_app_icons.py`](tools/make_app_icons.py): an indigo-to-violet plate, a frosted glass disc and a white camera. Run `python3 tools/make_app_icons.py` (needs `pip install pillow numpy`) after changing its colors or shapes; it rewrites:
 
 - iOS: `AppIcon` with light, dark and tinted variants.
 - macOS: `MacAppIcon`, 16 to 1024 px on Apple's grid with a drop shadow.
 - Android: an adaptive icon (vector background and foreground, plus a monochrome layer for themed icons), WebP launchers for Android 7, and the 512 px Play Store image.
+- Windows: `Assets/AppIcon.ico` (16 to 256 px) for the exe, the window, the taskbar and picture-in-picture, and `AppIcon.png` in the title bar.
 
 At 32 px and below the glass disc is dropped and the camera is drawn larger, so it stays readable.

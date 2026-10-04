@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- C# bindings for rtc_shim (windows/native/RtcShim). No UI dependency; also runs on Linux
+       against librtc_shim.so for the loopback tests. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <RootNamespace>WebRtcDemo.Interop</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WebRtcDemo.Core.Tests" />
+  </ItemGroup>
+
+</Project>

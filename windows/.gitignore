@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+AppPackages/
+
+# Native shim build output and the downloaded libwebrtc release
+native/RtcShim/out/
+native/RtcShim/third_party/

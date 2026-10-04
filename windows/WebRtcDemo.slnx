@@ -1,0 +1,18 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="ARM64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/WebRtcDemo.App/WebRtcDemo.App.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
+    </Project>
+    <Project Path="src/WebRtcDemo.Core/WebRtcDemo.Core.csproj" />
+    <Project Path="src/WebRtcDemo.Effects/WebRtcDemo.Effects.csproj" />
+    <Project Path="src/WebRtcDemo.Interop/WebRtcDemo.Interop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WebRtcDemo.Core.Tests/WebRtcDemo.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -11,6 +11,7 @@ It overwrites:
 - macOS:   ios/WebRTCDemoMac/Assets.xcassets/MacAppIcon.appiconset (16-1024 px)
 - Android: adaptive icon vectors in res/drawable, legacy WebP launchers in res/mipmap-*,
            and the 512 px Play Store image
+- Windows: windows/src/WebRtcDemo.App/Assets/AppIcon.ico (16-256 px) and AppIcon.png (256 px)
 
 Sizes of 32 px and below drop the glass disc and enlarge the camera so it stays legible.
 """
@@ -26,6 +27,7 @@ IOS_ICONSET = ROOT / "ios/WebRTCDemo/Assets.xcassets/AppIcon.appiconset"
 MAC_ICONSET = ROOT / "ios/WebRTCDemoMac/Assets.xcassets/MacAppIcon.appiconset"
 ANDROID_RES = ROOT / "android/app/src/main/res"
 ANDROID_PLAY_ICON = ROOT / "android/app/src/main/ic_launcher-playstore.png"
+WINDOWS_ASSETS = ROOT / "windows/src/WebRtcDemo.App/Assets"
 
 # Plate gradient, top-left to bottom-right.
 GRADIENT = [
@@ -174,6 +176,13 @@ def mac_icon(size):
     return canvas
 
 
+def windows_icon(size):
+    """Fluent-style rounded square that fills most of the frame."""
+    inset = max(1, round(size * 0.04)) if size > 16 else 0
+    radius = size * 0.22
+    return _masked(plate(size, small=size <= 32), _rounded_mask(size, inset, radius))
+
+
 def write_ios():
     IOS_ICONSET.mkdir(parents=True, exist_ok=True)
     plate(1024).convert("RGB").save(IOS_ICONSET / "AppIcon.png")  # iOS rejects alpha here
@@ -306,11 +315,20 @@ def write_android():
     plate(512).save(ANDROID_PLAY_ICON)  # Play wants 32-bit PNG; the plate is fully opaque
 
 
+def write_windows():
+    WINDOWS_ASSETS.mkdir(parents=True, exist_ok=True)
+    sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
+    frames = [windows_icon(s) for s in sizes]
+    frames[-1].save(WINDOWS_ASSETS / "AppIcon.ico", sizes=[(s, s) for s in sizes], append_images=frames[:-1])
+    frames[-1].save(WINDOWS_ASSETS / "AppIcon.png")
+
+
 def main():
     write_ios()
     write_mac()
     write_android()
-    print("App icons written for iOS, macOS and Android.")
+    write_windows()
+    print("App icons written for iOS, macOS, Android and Windows.")
 
 
 if __name__ == "__main__":

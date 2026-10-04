@@ -1,0 +1,21 @@
+{
+  "tag": "libwebrtc.m150.7871.03",
+  "url": "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m150.7871.03/",
+  "assets": {
+    "x64": {
+      "file": "libwebrtc-win-x64-release.zip",
+      "folder": "libwebrtc-x64-release",
+      "sha256": "4cd8fce2939b67b034200b124e4559cf343387a047118755925a0551328df84d"
+    },
+    "arm64": {
+      "file": "libwebrtc-win-arm64-release.zip",
+      "folder": "libwebrtc-arm64-release",
+      "sha256": "1c745596538a9530ef5e39c77d5c3edf38e1038f6352ddcc44fbacc14141e77d"
+    },
+    "linux-x64": {
+      "file": "libwebrtc-linux-x64-release.zip",
+      "folder": "linux-x64-release",
+      "sha256": "0acd09c7ae1bc9e61733337d6a4467010725b78734534124a4370f623c8a16db"
+    }
+  }
+}

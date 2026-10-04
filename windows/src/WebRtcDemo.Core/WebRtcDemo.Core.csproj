@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Signaling (plain WebSockets), the 1:1 and group call state, settings. No UI dependency, so it is unit tested on any OS. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WebRtcDemo.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../WebRtcDemo.Interop/WebRtcDemo.Interop.csproj" />
+    <ProjectReference Include="../WebRtcDemo.Effects/WebRtcDemo.Effects.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WebRtcDemo.Core.Tests" />
+  </ItemGroup>
+
+</Project>

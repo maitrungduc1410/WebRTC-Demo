@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <!-- CA1716: names that are keywords in VB only. -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Where scripts/build-shim.ps1 installs rtc_shim.dll + libwebrtc.dll per architecture. -->
+    <RtcShimInstallRoot>$(MSBuildThisFileDirectory)native/RtcShim/out/install/</RtcShimInstallRoot>
+  </PropertyGroup>
+</Project>

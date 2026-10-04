@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**WebRTC-Demo** is a comprehensive, cross-platform WebRTC demonstration project that showcases real-time peer-to-peer communication capabilities across Web, Android, iOS and macOS. The project implements modern WebRTC APIs (webrtc-sdk M150 on native) to enable video calls, audio communication, screen sharing, and data channel messaging between multiple clients.
+**WebRTC-Demo** is a comprehensive, cross-platform WebRTC demonstration project that showcases real-time peer-to-peer communication capabilities across Web, Android, iOS, macOS and Windows. The project implements modern WebRTC APIs (webrtc-sdk M150 on native) to enable video calls, audio communication, screen sharing, and data channel messaging between multiple clients.
 
 Two call modes:
 - **1:1 peer to peer (default).** Needs only `signaling-server/`. Keep this path zero-setup and its code easy to read: it is the main learning material.
@@ -359,6 +359,7 @@ The project uses Google's public STUN server:
 ### Prerequisites
 - Node.js 20.19+ and npm/yarn
 - iOS / macOS: Xcode 26, a device on iOS 26+ or a Mac on macOS 26+
+- Windows: Visual Studio 2026 (WinUI application development + Desktop development with C++ workloads; includes the .NET 10 SDK and CMake). `build-shim.ps1` finds Visual Studio with vswhere and uses its CMake and generator
 - Android: Android Studio, Android SDK (compileSdk 36), JDK 17+
 - Modern web browser with WebRTC support
 
@@ -489,6 +490,12 @@ Rooms are temporary and in-memory:
 **Swift packages fail to resolve**
 - **Solution**: File › Packages › Reset Package Caches, then Resolve Package Versions
 
+### Windows Issues
+
+- **`rtc_shim.dll` or `libwebrtc.dll` missing**: run `windows/native/RtcShim/scripts/build-shim.ps1 -Arch x64` (or `arm64`) before building the app
+- **Verify on Linux**: `windows/scripts/verify.sh` builds the shim against the Linux libwebrtc release and runs the shim loopback and .NET tests. With `signaling-server` (:4000) and `sfu-server` (:4001) running, the live 1:1 and group tests run too (`WEBRTC_DEMO_SIGNALING_URL` / `WEBRTC_DEMO_SFU_URL` override the addresses); otherwise they skip
+- **Group calls on Windows**: `WebRtcDemo.Core/Group` (engine, SDP mid/msid map, grid, fit, active speaker) over shim ABI 5 (an older `rtc_shim.dll` is refused at startup; rebuild it); signaling for both modes is one `ClientWebSocket` per call, no Socket.IO
+
 ### General Issues
 
 - **Connection Fails**: Check firewall settings, ensure signaling server is accessible
@@ -549,7 +556,7 @@ Rooms are temporary and in-memory:
 - **Reusability**: Platform-specific wrappers around WebRTC
 - **Error Handling**: Comprehensive error handling for network issues
 - **Logging**: Debug logs for troubleshooting
-- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by every app. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see the README); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`) in sync across platforms
+- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by every app. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see the README); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`, `StickerPlacement.cs`) in sync across platforms
 
 ### Testing Strategies
 

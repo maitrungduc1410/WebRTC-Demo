@@ -1,0 +1,19 @@
+Effects models for the Windows client
+
+selfie_segmenter.onnx, face_detector.onnx and face_landmarks_detector.onnx are converted from
+Google MediaPipe models, Copyright Google LLC, licensed under the Apache License 2.0 (LICENSE in
+this folder):
+
+  selfie_segmenter.onnx         <- selfie_segmenter.tflite
+  face_detector.onnx            <- face_detector.tflite            (inside face_landmarker.task)
+  face_landmarks_detector.onnx  <- face_landmarks_detector.tflite  (inside face_landmarker.task)
+
+The sources are the files the Android app ships (android/app/src/main/assets):
+
+  selfie_segmenter.tflite  sha256 191ac9529ae506ee0beefa6b2c945a172dab9d07d1e802a290a4e4038226658b
+  face_landmarker.task     sha256 64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff
+
+Changes made: converted from TensorFlow Lite to ONNX (opset 17) with tf2onnx; MediaPipe's custom
+Convolution2DTransposeBias op replaced by the equivalent standard ConvTranspose; batch size fixed
+at 1; initializers renamed. Weights are unchanged. convert.sh rebuilds the files byte for byte and
+checks them against SHA256SUMS; postprocess.py documents each graph change.
