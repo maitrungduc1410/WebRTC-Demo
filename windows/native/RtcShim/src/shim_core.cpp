@@ -11,6 +11,7 @@ thread_local std::string g_last_error;
 std::mutex g_log_mutex;
 rtc_log_cb g_log_cb = nullptr;
 void* g_log_user = nullptr;
+int32_t g_log_min = RTC_LOG_NONE;
 
 void ForwardLog(const libwebrtc::string& message) {
   std::lock_guard<std::mutex> lock(g_log_mutex);
@@ -32,6 +33,13 @@ RTCLoggingSeverity ToSeverity(int32_t severity) {
   }
 }
 }  // namespace
+
+void ShimLog(int32_t severity, const std::string& message) {
+  std::lock_guard<std::mutex> lock(g_log_mutex);
+  if (g_log_cb && severity >= g_log_min && g_log_min < RTC_LOG_NONE) {
+    g_log_cb(g_log_user, message.c_str());
+  }
+}
 
 void SetLastError(std::string message) { g_last_error = std::move(message); }
 
@@ -72,6 +80,7 @@ void RTC_CALL rtc_set_log_callback(int32_t min_severity, rtc_log_cb cb, void* us
       std::lock_guard<std::mutex> lock(g_log_mutex);
       g_log_cb = cb;
       g_log_user = user;
+      g_log_min = min_severity;
     }
     if (cb) {
       LibWebRTCLogging::setLogSink(ToSeverity(min_severity), &ForwardLog);

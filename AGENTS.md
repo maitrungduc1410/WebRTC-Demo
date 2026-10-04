@@ -494,7 +494,7 @@ Rooms are temporary and in-memory:
 
 - **`rtc_shim.dll` or `libwebrtc.dll` missing**: run `windows/native/RtcShim/scripts/build-shim.ps1 -Arch x64` (or `arm64`) before building the app
 - **Verify on Linux**: `windows/scripts/verify.sh` builds the shim against the Linux libwebrtc release and runs the shim loopback and .NET tests. With `signaling-server` (:4000) and `sfu-server` (:4001) running, the live 1:1 and group tests run too (`WEBRTC_DEMO_SIGNALING_URL` / `WEBRTC_DEMO_SFU_URL` override the addresses); otherwise they skip
-- **Group calls on Windows**: `WebRtcDemo.Core/Group` (engine, SDP mid/msid map, grid, fit, active speaker) over shim ABI 6 (an older `rtc_shim.dll` is refused at startup; rebuild it); signaling for both modes is one `ClientWebSocket` per call, no Socket.IO
+- **Group calls on Windows**: `WebRtcDemo.Core/Group` (engine, SDP mid/msid map, grid, fit, active speaker) over shim ABI 7 (an older `rtc_shim.dll` is refused at startup; rebuild it); signaling for both modes is one `ClientWebSocket` per call, no Socket.IO
 
 ### General Issues
 

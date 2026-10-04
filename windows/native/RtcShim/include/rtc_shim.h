@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#define RTC_SHIM_ABI_VERSION 6
+#define RTC_SHIM_ABI_VERSION 7
 
 typedef struct rtc_factory rtc_factory;
 typedef struct rtc_peer_connection rtc_peer_connection;
@@ -288,15 +288,20 @@ RTC_SHIM_API void RTC_CALL rtc_track_release(rtc_track* track);
 
 /* ---- Video sources ------------------------------------------------------------------------ */
 
-/* Opens camera `device_index` and starts capturing. */
+/* Opens camera `device_index` (as listed by rtc_video_device_info) and starts capturing. On
+ * Windows it captures through Media Foundation, as the Camera app does, trying the formats closest
+ * to width x height @ fps until one delivers frames (a few seconds each), and falls back to
+ * libwebrtc's DirectShow capturer for cameras Media Foundation doesn't list (DirectShow virtual
+ * cameras) or can't read. It blocks until the camera delivers frames, so call it off the UI thread.
+ * The log callback reports the format chosen (info) and why Media Foundation failed (warning). */
 RTC_SHIM_API rtc_video_source* RTC_CALL rtc_camera_source_create(rtc_factory* factory,
                                                                  uint32_t device_index,
                                                                  uint32_t width, uint32_t height,
                                                                  uint32_t fps);
 /* Starts or stops the underlying camera/desktop capturer without destroying the source (the
  * camera light goes off while stopped). Returns 1 on success. A camera cannot start again once
- * stopped (libwebrtc releases the device): starting it returns 0, and the caller opens a new
- * camera source. */
+ * stopped (the device is released), nor once Media Foundation stopped delivering frames (unplugged,
+ * taken by another app): starting it returns 0, and the caller opens a new camera source. */
 RTC_SHIM_API int32_t RTC_CALL rtc_video_source_set_capturing(rtc_video_source* source,
                                                              int32_t capturing);
 /* A source fed by rtc_custom_source_push_i420 (e.g. processed or synthetic frames). */

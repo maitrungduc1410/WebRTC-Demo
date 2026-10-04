@@ -47,6 +47,8 @@ using libwebrtc::scoped_refptr;
 
 void SetLastError(std::string message);
 void ClearLastError();
+// The shim's own messages, through the rtc_set_log_callback sink (RTC_LOG_* severity).
+void ShimLog(int32_t severity, const std::string& message);
 
 // Every exported function runs its body through Guard so that no C++ exception crosses the C ABI.
 template <typename R, typename F>
@@ -120,10 +122,31 @@ struct FileVideoReaderDeleter {
   void operator()(FileVideoReader* reader) const { StopFileVideoReader(reader); }
 };
 
+class CameraReader;
+
+// Implemented in shim_camera_win.cpp (Windows) or shim_camera_stub.cpp. Captures the camera
+// DirectShow lists as `device_path` / `name` through Media Foundation into `source`, and returns
+// once it delivers frames. Null when Media Foundation doesn't list it or no format delivers frames
+// (`error` says why; empty where Media Foundation doesn't exist).
+CameraReader* StartCameraReader(scoped_refptr<libwebrtc::RTCVideoSource> source,
+                                const std::string& device_path, const std::string& name,
+                                int width, int height, int fps, std::string* error);
+// False once reading has failed (unplugged, taken by another app): no frame comes any more.
+bool CameraReaderAlive(CameraReader* reader);
+// Closes the camera; no frame is pushed after it returns.
+void StopCameraReader(CameraReader* reader);
+
+struct CameraReaderDeleter {
+  void operator()(CameraReader* reader) const { StopCameraReader(reader); }
+};
+
 }  // namespace rtc_shim
 
 struct rtc_video_source {
   libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source;
+  // A camera is captured by one of these: Media Foundation, or libwebrtc's DirectShow capturer.
+  std::unique_ptr<rtc_shim::CameraReader, rtc_shim::CameraReaderDeleter> mf_camera;
+  bool media_foundation = false;  // stays true once mf_camera has been closed
   libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> camera;
   // libwebrtc's camera capturer frees its capture module when it stops or fails to start, and
   // then crashes on any further StartCapture/StopCapture. False from then on.

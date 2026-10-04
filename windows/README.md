@@ -270,11 +270,15 @@ On screen:
 - **Your own video stays black**: check that the Camera app shows the camera, that no other app is
   using it, and that *Let desktop apps access your camera* is on. If several cameras are listed,
   pick another one from the menu next to the camera button: a virtual camera (OBS and the like)
-  sends black while its app isn't running, and an infrared camera has no picture. libwebrtc
-  captures through DirectShow and skips formats it doesn't know (the `Device support unknown media
-  type` warnings; harmless while another format works, and a camera with none it knows shows up as
-  no camera). In a Debug run, set `WEBRTC_DEMO_LOG=info` before starting the app: the Output window
-  then lists each format as `Camera capability, width:… type:…` and `CreateCapabilityMap <count>`.
+  sends black while its app isn't running, and an infrared camera has no picture. The camera is
+  read through Media Foundation, as the Camera app does: the shim asks for the format closest to
+  1280×720 at 30 fps and, when no frame arrives within 4 s, tries the next one (up to four, down
+  to 640×480). Some drivers send nothing at 720p, such as the FaceTime HD camera under Boot Camp, so
+  turning such a camera on can take several seconds. A camera Media Foundation can't read (most
+  virtual cameras) goes through libwebrtc's DirectShow capturer instead. In a Debug run, set
+  `WEBRTC_DEMO_LOG=info` before starting the app: the Output window then shows `<camera> through
+  Media Foundation, NV12 1280x720@30` (the format in use), each format that sent nothing, and
+  `…; capturing through DirectShow` with the reason when it falls back.
 - **A black toolbar above the window content while debugging**: that is Visual Studio's XAML
   in-app toolbar (Live Visual Tree, element selection), not part of the app. Turn it off in Tools ›
   Options › Debugging › XAML Hot Reload › *Show runtime tools in application*.

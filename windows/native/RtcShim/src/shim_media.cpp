@@ -156,8 +156,30 @@ rtc_video_source* RTC_CALL rtc_camera_source_create(rtc_factory* factory,
       return nullptr;
     }
     char name[256] = {0};
-    char unique_id[256] = {0};
+    char unique_id[512] = {0};
     device->GetDeviceName(device_index, name, sizeof(name), unique_id, sizeof(unique_id));
+
+    // Media Foundation first (as the Camera app); DirectShow for what it doesn't list or can't read.
+    scoped_refptr<RTCVideoSource> mf_source =
+        factory->factory->CreateCustomVideoSource(Str("camera"), RTCMediaConstraints::Create());
+    if (mf_source) {
+      std::string mf_error;
+      CameraReader* reader = StartCameraReader(mf_source, unique_id, name, static_cast<int>(width),
+                                               static_cast<int>(height), static_cast<int>(fps),
+                                               &mf_error);
+      if (reader) {
+        auto* handle = new rtc_video_source();
+        handle->source = mf_source;
+        handle->mf_camera.reset(reader);
+        handle->media_foundation = true;
+        return handle;
+      }
+      if (!mf_error.empty()) {
+        ShimLog(RTC_LOG_WARNING, std::string("(shim_media.cpp): ") + name + ": " + mf_error +
+                                     "; capturing through DirectShow");
+      }
+    }
+
     scoped_refptr<RTCVideoCapturer> capturer =
         device->Create(name, device_index, width, height, fps);
     if (!capturer) {
@@ -182,6 +204,17 @@ rtc_video_source* RTC_CALL rtc_camera_source_create(rtc_factory* factory,
 int32_t RTC_CALL rtc_video_source_set_capturing(rtc_video_source* source, int32_t capturing) {
   return Guard<int32_t>(0, __func__, [&]() -> int32_t {
     if (!source) return 0;
+    if (source->media_foundation) {
+      // Stopping closes it; like libwebrtc's, it is then not reopened in place.
+      if (!capturing) {
+        source->mf_camera.reset();
+        return 1;
+      }
+      if (source->mf_camera && !rtc_shim::CameraReaderAlive(source->mf_camera.get())) {
+        source->mf_camera.reset();  // the caller opens the camera again
+      }
+      return source->mf_camera ? 1 : 0;
+    }
     if (source->camera) {
       if (!capturing) {
         if (source->camera_open) source->camera->StopCapture();
@@ -286,6 +319,7 @@ void RTC_CALL rtc_video_source_release(rtc_video_source* source) {
   GuardVoid(__func__, [&] {
     if (!source) return;
     source->file.reset();
+    source->mf_camera.reset();
     if (source->desktop) {
       if (source->desktop_observer) {
         source->desktop_observer->Deactivate();

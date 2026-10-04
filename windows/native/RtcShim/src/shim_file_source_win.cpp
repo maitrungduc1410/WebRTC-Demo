@@ -1,62 +1,18 @@
 // Video file share: Media Foundation decodes the file to NV12 on a dedicated MTA thread, the
 // frames are converted to I420 and pushed into a custom video source at their own timestamps.
-#include "shim_internal.h"
+#include "shim_mf_win.h"
 
 #include <chrono>
 #include <condition_variable>
-#include <cstdio>
 #include <future>
 #include <thread>
 
-#include <windows.h>
-#include <mfapi.h>
-#include <mferror.h>
-#include <mfidl.h>
-#include <mfreadwrite.h>
 #include <propvarutil.h>
 
 using namespace libwebrtc;
 
 namespace rtc_shim {
 namespace {
-
-template <typename T>
-class Com {
- public:
-  Com() = default;
-  Com(const Com&) = delete;
-  Com& operator=(const Com&) = delete;
-  ~Com() { Reset(); }
-  T** Put() {
-    Reset();
-    return &ptr_;
-  }
-  T* Get() const { return ptr_; }
-  T* operator->() const { return ptr_; }
-  explicit operator bool() const { return ptr_ != nullptr; }
-  void Reset() {
-    if (ptr_) ptr_->Release();
-    ptr_ = nullptr;
-  }
-
- private:
-  T* ptr_ = nullptr;
-};
-
-std::wstring Widen(const std::string& utf8) {
-  if (utf8.empty()) return std::wstring();
-  const int length = MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()),
-                                         nullptr, 0);
-  std::wstring wide(static_cast<size_t>(length), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), &wide[0], length);
-  return wide;
-}
-
-std::string HrMessage(const char* what, HRESULT hr) {
-  char text[96];
-  std::snprintf(text, sizeof(text), "%s failed (hr=0x%08lX)", what, static_cast<unsigned long>(hr));
-  return text;
-}
 
 struct Format {
   int width = 0;   // decoded buffer size
@@ -261,26 +217,8 @@ class FileVideoReader {
     const int w = f.crop_w;
     const int h = f.crop_h;
     const int cw = w / 2;
-    const int ch = h / 2;
-    y_.resize(static_cast<size_t>(w) * h);
-    u_.resize(static_cast<size_t>(cw) * ch);
-    v_.resize(static_cast<size_t>(cw) * ch);
-
-    const BYTE* src_y = data + static_cast<size_t>(f.crop_y) * pitch + f.crop_x;
-    for (int row = 0; row < h; ++row) {
-      std::memcpy(&y_[static_cast<size_t>(row) * w], src_y + static_cast<size_t>(row) * pitch, w);
-    }
-    const BYTE* src_uv = data + static_cast<size_t>(f.height) * pitch +
-                         static_cast<size_t>(f.crop_y / 2) * pitch + f.crop_x;
-    for (int row = 0; row < ch; ++row) {
-      const BYTE* line = src_uv + static_cast<size_t>(row) * pitch;
-      uint8_t* u = &u_[static_cast<size_t>(row) * cw];
-      uint8_t* v = &v_[static_cast<size_t>(row) * cw];
-      for (int col = 0; col < cw; ++col) {
-        u[col] = line[col * 2];
-        v[col] = line[col * 2 + 1];
-      }
-    }
+    CopyNv12ToI420(data, data + static_cast<size_t>(f.height) * pitch, pitch, f.crop_x, f.crop_y,
+                   w, h, &y_, &u_, &v_);
     if (locked2d) buffer2d->Unlock2D(); else buffer->Unlock();
 
     scoped_refptr<RTCVideoFrame> frame =

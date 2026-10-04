@@ -407,7 +407,7 @@ public sealed class NativeCallMedia : ICallMedia
             SyncEffectsTrack();
             return true;
         }
-        // libwebrtc releases the camera when it stops, so turning it back on opens it again.
+        // A stopped camera has released the device, so turning it back on opens it again.
         var generation = _localGeneration;
         return await ReopenCameraAsync().ConfigureAwait(true) || generation != _localGeneration;
     }

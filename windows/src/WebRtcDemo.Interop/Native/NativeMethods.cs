@@ -64,7 +64,7 @@ internal unsafe struct KeyProviderOptionsNative
 internal static unsafe partial class NativeMethods
 {
     public const string Library = "rtc_shim";
-    public const int ExpectedAbiVersion = 6;
+    public const int ExpectedAbiVersion = 7;
 
     // ---- Library ------------------------------------------------------------------------------
 
