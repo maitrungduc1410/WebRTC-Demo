@@ -125,6 +125,9 @@ struct FileVideoReaderDeleter {
 struct rtc_video_source {
   libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source;
   libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> camera;
+  // libwebrtc's camera capturer frees its capture module when it stops or fails to start, and
+  // then crashes on any further StartCapture/StopCapture. False from then on.
+  bool camera_open = false;
   libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> desktop;
   uint32_t desktop_fps = 0;
   rtc_shim::DesktopCaptureObserver* desktop_observer = nullptr;

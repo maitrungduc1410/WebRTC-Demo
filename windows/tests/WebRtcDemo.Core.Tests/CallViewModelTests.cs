@@ -368,6 +368,36 @@ public sealed class CallViewModelTests : IDisposable
     }
 
     [Fact]
+    public void A_camera_that_cannot_reopen_turns_off_again()
+    {
+        ConnectCall();
+        Run(_vm.ToggleCamera);
+        Advance(300);
+        _media.CameraReopens = false;
+
+        Run(_vm.ToggleCamera);
+        Assert.False(_vm.CameraOn);
+        Assert.Equal(new Toast("Couldn't turn the camera on", ToastKind.Error, Glyphs.VideoOff), _toasts[^1]);
+        Advance(300);
+        Assert.Equal("Camera(False)", _media.Log[^1]);
+        Assert.Equal("audio=True video=False screen=False", State(MediaStates()[^1]));
+    }
+
+    [Fact]
+    public async Task A_camera_that_cannot_reopen_after_presenting_turns_off()
+    {
+        ConnectCall();
+        await _vm.ShareFileAsync("/videos/demo clip.mp4");
+        _dispatcher.RunPending();
+        _media.CameraReopens = false;
+
+        await _vm.StopSharingAsync();
+        Assert.False(_vm.CameraOn);
+        Assert.Equal(new Toast("Couldn't turn the camera back on", ToastKind.Error, Glyphs.VideoOff), _toasts[^1]);
+        Assert.Equal("audio=True video=False screen=False", State(MediaStates()[^1]));
+    }
+
+    [Fact]
     public void Mic_toggle_is_sent_at_once()
     {
         ConnectCall();

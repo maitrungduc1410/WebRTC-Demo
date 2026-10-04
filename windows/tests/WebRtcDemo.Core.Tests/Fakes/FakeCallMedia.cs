@@ -163,11 +163,13 @@ public sealed class FakeCallMedia : ICallMedia
 
     public void SetMicrophoneEnabled(bool enabled) => MicEnabled = enabled;
 
-    public Task SetCameraEnabledAsync(bool enabled)
+    public bool CameraReopens { get; set; } = true;
+
+    public Task<bool> SetCameraEnabledAsync(bool enabled)
     {
         CameraEnabled = enabled;
         Log.Add($"Camera({enabled})");
-        return Task.CompletedTask;
+        return Task.FromResult(!enabled || CameraReopens);
     }
 
     public Task<bool> SelectCameraAsync(string id)
@@ -203,10 +205,10 @@ public sealed class FakeCallMedia : ICallMedia
         return Task.FromResult(!path.Contains("broken", StringComparison.Ordinal));
     }
 
-    public Task StopPresentingAsync()
+    public Task<bool> StopPresentingAsync()
     {
         Log.Add("StopPresenting");
-        return Task.CompletedTask;
+        return Task.FromResult(!CameraEnabled || CameraReopens);
     }
 
     public void HoldEffects() => Log.Add("HoldEffects");

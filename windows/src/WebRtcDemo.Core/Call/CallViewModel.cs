@@ -982,8 +982,8 @@ public sealed partial class CallViewModel : ObservableObject, IDisposable
                 _effectsBroken = false;
                 _ = ApplyEffectsAsync();
             }
-            _ = _media.SetCameraEnabledAsync(true);
             _mediaStateTimer = After(MediaStateDelay, SendMediaState);
+            _ = TurnCameraOnAsync();
         }
         else
         {
@@ -993,6 +993,13 @@ public sealed partial class CallViewModel : ObservableObject, IDisposable
                 if (!CameraOn && !IsPresenting) _ = _media.SetCameraEnabledAsync(false);
             });
         }
+    }
+
+    private async Task TurnCameraOnAsync()
+    {
+        if (await _media.SetCameraEnabledAsync(true) || !CameraOn || !InRoom) return;
+        SetCameraOn(false);
+        Show("Couldn't turn the camera on", ToastKind.Error, Glyphs.VideoOff);
     }
 
     [RelayCommand]
@@ -1262,9 +1269,17 @@ public sealed partial class CallViewModel : ObservableObject, IDisposable
         if (previous == Presentation.None) return;
         Sharing = Presentation.None;
         SharingTitle = null;
-        await _media.StopPresentingAsync();
-        SendMediaState();
-        Show(previous == Presentation.File ? "Stopped video sharing" : "Screen sharing stopped", ToastKind.Info, Glyphs.StopShare);
+        var cameraBack = await _media.StopPresentingAsync();
+        if (!cameraBack && CameraOn && InRoom)
+        {
+            SetCameraOn(false);
+            Show("Couldn't turn the camera back on", ToastKind.Error, Glyphs.VideoOff);
+        }
+        else
+        {
+            SendMediaState();
+            Show(previous == Presentation.File ? "Stopped video sharing" : "Screen sharing stopped", ToastKind.Info, Glyphs.StopShare);
+        }
         OnPropertyChanged(nameof(CanSwitchCamera));
     }
 

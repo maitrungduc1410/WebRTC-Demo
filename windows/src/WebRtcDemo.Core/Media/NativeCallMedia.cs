@@ -39,6 +39,7 @@ public sealed class NativeCallMedia : ICallMedia
     private MediaTrack? _cameraTrack;
     private int _cameraIndex = -1;
     private bool _cameraEnabled = true;
+    private Task<bool> _cameraReopen = Task.FromResult(true);
     private VideoSource? _placeholderSource;
     private MediaTrack? _placeholderTrack;
     private VideoSource? _presentSource;
@@ -234,10 +235,24 @@ public sealed class NativeCallMedia : ICallMedia
     {
         var index = IndexOf(_cameraInfos, id);
         if (index < 0) return false;
+        // After a camera still being opened, so a failure goes back to the last one that worked.
+        await Task.WhenAny(_cameraReopen).ConfigureAwait(true);
+        if (!_localStarted) return false;
         if (index == _cameraIndex && _cameraTrack != null) return true;
+        var generation = _localGeneration;
+        var previousIndex = _cameraIndex;
+        var previousId = CameraId;
         _cameraIndex = index;
         CameraId = id;
-        return await ReopenCameraAsync().ConfigureAwait(true);
+        if (await ReopenCameraAsync().ConfigureAwait(true)) return true;
+        // The previous camera was released for the attempt; open it again.
+        if (generation == _localGeneration && previousIndex >= 0 && previousIndex != index && _cameraIndex == index)
+        {
+            _cameraIndex = previousIndex;
+            CameraId = previousId;
+            await ReopenCameraAsync().ConfigureAwait(true);
+        }
+        return false;
     }
 
     // ---- Local media --------------------------------------------------------------------------
@@ -245,6 +260,9 @@ public sealed class NativeCallMedia : ICallMedia
     public async Task<LocalMediaResult> StartLocalMediaAsync(string? cameraId, string? microphoneId, string? speakerId)
     {
         var generation = ++_localGeneration;
+        // A reopen from the last call may still hold the camera.
+        await Task.WhenAny(_cameraReopen).ConfigureAwait(true);
+        if (generation != _localGeneration || _disposed) return new LocalMediaResult(false, false);
         RefreshDevices();
         if (_microphones.IndexOf(microphoneId) >= 0 && !(_microphones.Pinned && microphoneId == MicrophoneId)) SelectMicrophone(microphoneId!);
         if (_speakers.IndexOf(speakerId) >= 0 && !(_speakers.Pinned && speakerId == SpeakerId)) SelectSpeaker(speakerId!);
@@ -363,17 +381,23 @@ public sealed class NativeCallMedia : ICallMedia
         if (!enabled) _idleMeter.Stop();
     }
 
-    public async Task SetCameraEnabledAsync(bool enabled)
+    public async Task<bool> SetCameraEnabledAsync(bool enabled)
     {
         _cameraEnabled = enabled;
         // The camera stays closed while presenting; StopPresentingAsync applies the setting.
-        if (_presentation != Presentation.None || _cameraTrack == null) return;
+        if (_presentation != Presentation.None || _cameraTrack == null) return true;
         if (!enabled)
         {
             _cameraTrack.Enabled = false;
             SyncEffectsTrack();
             _cameraSource?.SetCapturing(false);
-            return;
+            return true;
+        }
+        // A camera being opened (an earlier "on", or a switch) follows the setting once it is in.
+        if (!_cameraReopen.IsCompleted)
+        {
+            await Task.WhenAny(_cameraReopen).ConfigureAwait(true);
+            if (!_cameraEnabled || _presentation != Presentation.None || _cameraTrack == null) return true;
         }
         // The last mask and face are from before the camera went off.
         _processor?.InvalidateAnalysis();
@@ -381,17 +405,35 @@ public sealed class NativeCallMedia : ICallMedia
         {
             _cameraTrack.Enabled = true;
             SyncEffectsTrack();
-            return;
+            return true;
         }
-        // libwebrtc destroys a capturer that fails to restart, e.g. after the device was unplugged.
-        await ReopenCameraAsync().ConfigureAwait(true);
+        // libwebrtc releases the camera when it stops, so turning it back on opens it again.
+        var generation = _localGeneration;
+        return await ReopenCameraAsync().ConfigureAwait(true) || generation != _localGeneration;
     }
 
-    /// <summary>Replaces the camera source (another device, or after a failure).</summary>
-    private async Task<bool> ReopenCameraAsync()
+    /// <summary>
+    /// Replaces the camera source (another device, or turning it back on). One at a time: most
+    /// cameras cannot be opened twice, and a later open must not leak an earlier one's source.
+    /// </summary>
+    private Task<bool> ReopenCameraAsync()
+    {
+        var reopen = ReopenAfterAsync(_cameraReopen, _localGeneration);
+        _cameraReopen = reopen;
+        return reopen;
+    }
+
+    private async Task<bool> ReopenAfterAsync(Task previous, int generation)
+    {
+        // Its outcome (or failure) is its caller's.
+        await Task.WhenAny(previous).ConfigureAwait(true);
+        if (generation != _localGeneration || _disposed) return false;
+        return await ReopenCameraNowAsync(generation).ConfigureAwait(true);
+    }
+
+    private async Task<bool> ReopenCameraNowAsync(int generation)
     {
         if (_cameraIndex < 0) return false;
-        var generation = _localGeneration;
         var index = _cameraIndex;
         var oldSource = _cameraSource;
         var oldTrack = _cameraTrack;
@@ -405,11 +447,7 @@ public sealed class NativeCallMedia : ICallMedia
             source?.Dispose();
             return false;
         }
-        if (track == null)
-        {
-            if (_cameraEnabled && _presentation == Presentation.None) oldSource?.SetCapturing(true);
-            return false;
-        }
+        if (track == null) return false;
 
         _cameraSource = source;
         _cameraTrack = track;
@@ -523,9 +561,9 @@ public sealed class NativeCallMedia : ICallMedia
         return true;
     }
 
-    public async Task StopPresentingAsync()
+    public async Task<bool> StopPresentingAsync()
     {
-        if (_presentation == Presentation.None) return;
+        if (_presentation == Presentation.None) return true;
         _presentGeneration++;
         var oldSource = _presentSource;
         var oldTrack = _presentTrack;
@@ -538,14 +576,26 @@ public sealed class NativeCallMedia : ICallMedia
         oldTrack?.Dispose();
         oldSource?.Dispose();
 
+        // A camera still being opened sees the presentation gone and starts by itself.
+        if (!_cameraReopen.IsCompleted)
+        {
+            var generation = _localGeneration;
+            await Task.WhenAny(_cameraReopen).ConfigureAwait(true);
+            if (generation != _localGeneration || _presentation != Presentation.None) return true;
+        }
         if (_cameraTrack != null)
         {
             _cameraTrack.Enabled = _cameraEnabled;
             SyncEffectsTrack();
             // The last mask and face are from before the presentation.
             _processor?.InvalidateAnalysis();
-            if (_cameraEnabled && !(_cameraSource?.SetCapturing(true) ?? false)) await ReopenCameraAsync().ConfigureAwait(true);
+            if (_cameraEnabled && !(_cameraSource?.SetCapturing(true) ?? false))
+            {
+                var generation = _localGeneration;
+                return await ReopenCameraAsync().ConfigureAwait(true) || generation != _localGeneration;
+            }
         }
+        return true;
     }
 
     // ---- Effects ------------------------------------------------------------------------------

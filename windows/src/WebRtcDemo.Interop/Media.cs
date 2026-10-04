@@ -100,7 +100,10 @@ public sealed unsafe class VideoSource : IDisposable
         return source;
     }
 
-    /// <summary>Stops or restarts a camera or desktop capturer without destroying the source.</summary>
+    /// <summary>
+    /// Stops or restarts a camera or desktop capturer without destroying the source. A camera cannot
+    /// restart once stopped (false): open a new camera source instead.
+    /// </summary>
     public bool SetCapturing(bool capturing) => NativeMethods.rtc_video_source_set_capturing(Handle, capturing ? 1 : 0) != 0;
 
     public bool PushI420(int width, int height, ReadOnlySpan<byte> y, int strideY, ReadOnlySpan<byte> u, int strideU, ReadOnlySpan<byte> v, int strideV)

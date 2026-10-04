@@ -257,13 +257,27 @@ On screen:
 
 - **"rtc_shim.dll or libwebrtc.dll is missing"**: run `native/RtcShim/scripts/build-shim.ps1`
   for the architecture you build (`-Arch x64` / `-Arch arm64`), then rebuild the app.
-- **"…cannot be loaded because running scripts is disabled on this system"**: run the script as
+- **"…cannot be loaded because running scripts is disabled on this system"** (`PSSecurityException`,
+  `UnauthorizedAccess`): run `Set-ExecutionPolicy -Scope Process Bypass` in that PowerShell window
+  first, or run the script as
   `powershell -ExecutionPolicy Bypass -File native/RtcShim/scripts/build-shim.ps1`, or allow local
-  scripts once with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+  scripts once with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. With the last one, a
+  repository downloaded as a ZIP also needs `Get-ChildItem -Recurse -Filter *.ps1 | Unblock-File`.
 - **`NETSDK1233` warning**: the solution was opened in Visual Studio 2022; use Visual Studio 2026.
 - **`rtc_shim ABI … does not match`**: the DLL is older than the bindings; rebuild the shim.
 - **No camera or microphone**: check the Windows privacy settings above; the call still works
   receive-only, and a notice on the call screen says what is missing.
+- **Your own video stays black**: check that the Camera app shows the camera, that no other app is
+  using it, and that *Let desktop apps access your camera* is on. If several cameras are listed,
+  pick another one from the menu next to the camera button: a virtual camera (OBS and the like)
+  sends black while its app isn't running, and an infrared camera has no picture. libwebrtc
+  captures through DirectShow and skips formats it doesn't know (the `Device support unknown media
+  type` warnings; harmless while another format works, and a camera with none it knows shows up as
+  no camera). In a Debug run, set `WEBRTC_DEMO_LOG=info` before starting the app: the Output window
+  then lists each format as `Camera capability, width:… type:…` and `CreateCapabilityMap <count>`.
+- **A black toolbar above the window content while debugging**: that is Visual Studio's XAML
+  in-app toolbar (Live Visual Tree, element selection), not part of the app. Turn it off in Tools ›
+  Options › Debugging › XAML Hot Reload › *Show runtime tools in application*.
 - **Microphone or speaker unplugged mid-call**: within about 2 s the call moves to the Windows
   default communications device (the first in the list if that is unknown) and says "Switched
   to …"; with no microphone left it turns the mic off and tells the others. The audio sender, its

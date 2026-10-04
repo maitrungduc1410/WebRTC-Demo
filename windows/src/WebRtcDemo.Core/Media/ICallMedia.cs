@@ -114,8 +114,11 @@ public interface ICallMedia : IGroupCallMedia, IDisposable
     Task<double?> GetMicPeakAsync();
 
     void SetMicrophoneEnabled(bool enabled);
-    /// <summary>Off disables the track and closes the camera (its light goes off); on reopens it.</summary>
-    Task SetCameraEnabledAsync(bool enabled);
+    /// <summary>
+    /// Off disables the track and closes the camera (its light goes off); on reopens it. False when
+    /// the camera could not be opened again (taken by another app, unplugged).
+    /// </summary>
+    Task<bool> SetCameraEnabledAsync(bool enabled);
     Task<bool> SelectCameraAsync(string id);
     bool SelectMicrophone(string id);
     bool SelectSpeaker(string id);
@@ -126,8 +129,8 @@ public interface ICallMedia : IGroupCallMedia, IDisposable
     IShareSourceList CreateShareSourceList(DesktopSourceType type);
     Task<bool> StartScreenShareAsync(ShareSource source);
     Task<bool> StartFileShareAsync(string path);
-    /// <summary>Back to the camera, which is reopened when it is on.</summary>
-    Task StopPresentingAsync();
+    /// <summary>Back to the camera, which is reopened when it is on. False when that failed.</summary>
+    Task<bool> StopPresentingAsync();
 
     /// <summary>
     /// Call before <see cref="StartLocalMediaAsync"/> when a saved effect will be applied: no

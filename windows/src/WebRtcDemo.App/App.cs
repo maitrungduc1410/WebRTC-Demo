@@ -45,7 +45,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
             WebRtcRuntime.Initialize();
             WebRtcRuntime.CallbackException += e => Log("Native callback: " + e);
 #if DEBUG
-            WebRtcRuntime.SetLogSink(message => System.Diagnostics.Debug.WriteLine(message));
+            // WEBRTC_DEMO_LOG=info (or verbose) also shows camera formats and capture state.
+            var logLevel = Environment.GetEnvironmentVariable("WEBRTC_DEMO_LOG")?.Trim().ToLowerInvariant() switch
+            {
+                "verbose" => LogSeverity.Verbose,
+                "info" => LogSeverity.Info,
+                _ => LogSeverity.Warning,
+            };
+            WebRtcRuntime.SetLogSink(message => System.Diagnostics.Debug.WriteLine(message), logLevel);
 #endif
             Factory = new PeerConnectionFactory();
             EffectsAcceleration.Start();

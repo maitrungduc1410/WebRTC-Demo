@@ -174,6 +174,7 @@ rtc_video_source* RTC_CALL rtc_camera_source_create(rtc_factory* factory,
     auto* handle = new rtc_video_source();
     handle->source = source;
     handle->camera = capturer;
+    handle->camera_open = true;
     return handle;
   });
 }
@@ -183,10 +184,14 @@ int32_t RTC_CALL rtc_video_source_set_capturing(rtc_video_source* source, int32_
     if (!source) return 0;
     if (source->camera) {
       if (!capturing) {
-        source->camera->StopCapture();
+        if (source->camera_open) source->camera->StopCapture();
+        source->camera_open = false;
         return 1;
       }
-      return source->camera->CaptureStarted() || source->camera->StartCapture() ? 1 : 0;
+      if (!source->camera_open) return 0;
+      if (source->camera->CaptureStarted()) return 1;
+      source->camera_open = source->camera->StartCapture();
+      return source->camera_open ? 1 : 0;
     }
     if (source->desktop) {
       if (!capturing) {
@@ -288,7 +293,7 @@ void RTC_CALL rtc_video_source_release(rtc_video_source* source) {
       }
       source->desktop->Stop();
     }
-    if (source->camera) source->camera->StopCapture();
+    if (source->camera && source->camera_open) source->camera->StopCapture();
     // The observer is not deleted: the capturer may still be inside a BlockingCall that read the
     // observer pointer before DeRegister. Deactivated, it is inert.
     delete source;

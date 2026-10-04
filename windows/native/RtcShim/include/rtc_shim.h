@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#define RTC_SHIM_ABI_VERSION 5
+#define RTC_SHIM_ABI_VERSION 6
 
 typedef struct rtc_factory rtc_factory;
 typedef struct rtc_peer_connection rtc_peer_connection;
@@ -294,7 +294,9 @@ RTC_SHIM_API rtc_video_source* RTC_CALL rtc_camera_source_create(rtc_factory* fa
                                                                  uint32_t width, uint32_t height,
                                                                  uint32_t fps);
 /* Starts or stops the underlying camera/desktop capturer without destroying the source (the
- * camera light goes off while stopped). Returns 1 on success. */
+ * camera light goes off while stopped). Returns 1 on success. A camera cannot start again once
+ * stopped (libwebrtc releases the device): starting it returns 0, and the caller opens a new
+ * camera source. */
 RTC_SHIM_API int32_t RTC_CALL rtc_video_source_set_capturing(rtc_video_source* source,
                                                              int32_t capturing);
 /* A source fed by rtc_custom_source_push_i420 (e.g. processed or synthetic frames). */
