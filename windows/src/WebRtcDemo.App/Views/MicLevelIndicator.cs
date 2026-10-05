@@ -31,7 +31,8 @@ internal sealed class MicLevelIndicator : Grid
     private readonly double _minBar;
     private readonly double _maxBar;
     private readonly Ellipse _circle = new() { Fill = Black(0x8C) };
-    private readonly StackPanel _barRow;
+    /// <summary>The bars, centred in a layer the circle's size, so muting scales them about its centre.</summary>
+    private readonly Grid _barRow = new();
     private readonly FontIcon? _mutedIcon;
     private bool _muted;
     private double _level;
@@ -60,13 +61,14 @@ internal sealed class MicLevelIndicator : Grid
         AutomationProperties.SetAccessibilityView(this, AccessibilityView.Raw);
         Children.Add(_circle);
         _bars = new Rectangle[Gains.Length];
-        _barRow = new StackPanel
+        var bars = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = large ? 4 : 3,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        _barRow.Children.Add(bars);
         for (var i = 0; i < _bars.Length; i++)
         {
             _bars[i] = new Rectangle
@@ -79,7 +81,7 @@ internal sealed class MicLevelIndicator : Grid
                 VerticalAlignment = VerticalAlignment.Center,
             };
             _barFrom[i] = _barTo[i] = _minBar;
-            _barRow.Children.Add(_bars[i]);
+            bars.Children.Add(_bars[i]);
         }
         Children.Add(_barRow);
         if (large)

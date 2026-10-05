@@ -27,7 +27,7 @@ internal sealed class EffectsPanel : Grid, IDisposable
 
     private readonly CallViewModel _vm;
     private readonly Bindings _bindings = new();
-    private readonly VideoView _preview = new() { Mirrored = true };
+    private readonly VideoView _preview = new() { Mirrored = true, Rounding = 24 };
     private readonly Border _previewMessage;
     private readonly TextBlock _previewText = Text(string.Empty, 13, foreground: White(0xCC));
     private readonly ProgressRing _loading = new() { Width = 32, Height = 32, Foreground = White(), IsActive = false };

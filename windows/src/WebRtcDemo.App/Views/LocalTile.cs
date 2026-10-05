@@ -42,6 +42,7 @@ internal sealed class LocalTile : Grid
     {
         t.TextWrapping = TextWrapping.NoWrap;
         t.TextTrimming = TextTrimming.CharacterEllipsis;
+        t.VerticalAlignment = VerticalAlignment.Center;
     });
     private readonly MicLevelIndicator _micLevel = new()
     {
@@ -114,7 +115,7 @@ internal sealed class LocalTile : Grid
         // "You", and in a group call how the others see us; the red mic-off badge collapses
         // to nothing while the mic is on (web: LocalTile.vue).
         _labelMic.Status = PillStatus.None;
-        var you = Text("You", 12, FontWeights.SemiBold, White());
+        var you = Text("You", 12, FontWeights.SemiBold, White()).With(t => t.VerticalAlignment = VerticalAlignment.Center);
         var label = new Grid
         {
             ColumnSpacing = 6,
@@ -223,6 +224,8 @@ internal sealed class LocalTile : Grid
         var tile = !_wholeStage;
         CornerRadius = new CornerRadius(tile ? 12 : 0);
         BorderThickness = new Thickness(tile ? 1 : 0);
+        _video.Rounding = tile ? 11 : 0;
+        _cameraOff.CornerRadius = new CornerRadius(tile ? 11 : 0);
         // Lifted above the stage (with its shadow) only as a tile.
         Translation = new Vector3(0, 0, tile ? 32 : 0);
         ManipulationMode = tile ? ManipulationModes.TranslateX | ManipulationModes.TranslateY : ManipulationModes.None;

@@ -56,6 +56,7 @@ internal sealed class GroupTile : Grid, IDisposable
         // Fades in when added (and back when the stage shows it again after picture in picture).
         OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(300) };
 
+        _video.Rounding = 15;
         Children.Add(_video);
 
         _avatar.Children.Add(_ring);

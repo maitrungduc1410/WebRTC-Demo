@@ -40,6 +40,9 @@ internal sealed class VideoView : Grid
     private bool _sizeChangedThisTick;
     private float _fitScale = 1;
     private readonly RectangleGeometry _clip = new();
+    /// <summary>On the host's visual: CornerRadius, the view's or a parent's, doesn't clip a swap chain.</summary>
+    private readonly CompositionRoundedRectangleGeometry _roundedClip;
+    private double _rounding;
     private readonly Lock _gate = new();
     private SwapChainRenderer? _renderer;
     private IVideoFeed? _feed;
@@ -65,9 +68,13 @@ internal sealed class VideoView : Grid
         _host.Children.Add(_panel);
         Children.Add(_host);
         _visual = ElementCompositionPreview.GetElementVisual(_panel);
+        var hostVisual = ElementCompositionPreview.GetElementVisual(_host);
+        _roundedClip = hostVisual.Compositor.CreateRoundedRectangleGeometry();
+        hostVisual.Clip = hostVisual.Compositor.CreateGeometricClip(_roundedClip);
         SizeChanged += (_, _) =>
         {
             _clip.Rect = new Windows.Foundation.Rect(0, 0, ActualWidth, ActualHeight);
+            _roundedClip.Size = new Vector2((float)ActualWidth, (float)ActualHeight);
             UpdateLayoutRect(animate: false);
             _sizeChangedThisTick = true;
         };
@@ -120,6 +127,18 @@ internal sealed class VideoView : Grid
             if (_fit == value) return;
             _fit = value;
             UpdateLayoutRect(animate: AnimatesFit && _laidOut && IsLoaded && !_sizeChangedThisTick);
+        }
+    }
+
+    /// <summary>The corners' radius, for a view inside a rounded tile (inside its border, the tile's radius less the border).</summary>
+    public double Rounding
+    {
+        get => _rounding;
+        set
+        {
+            _rounding = value;
+            CornerRadius = new CornerRadius(value);
+            _roundedClip.CornerRadius = new Vector2((float)value);
         }
     }
 

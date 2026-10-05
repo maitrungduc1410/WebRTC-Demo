@@ -140,6 +140,10 @@ struct CameraReaderDeleter {
   void operator()(CameraReader* reader) const { StopCameraReader(reader); }
 };
 
+// Implemented in shim_audio_win.cpp (Windows) or shim_audio_stub.cpp. factory->Initialize(), with
+// Windows' voice-capture DMO kept out of the audio device module it creates.
+bool InitializeFactory(libwebrtc::RTCPeerConnectionFactory* factory);
+
 }  // namespace rtc_shim
 
 struct rtc_video_source {

@@ -59,9 +59,9 @@ set(_rtc_sources
   src/shim_media.cpp
   src/shim_peer.cpp)
 if(WIN32)
-  list(APPEND _rtc_sources src/shim_camera_win.cpp src/shim_file_source_win.cpp)
+  list(APPEND _rtc_sources src/shim_audio_win.cpp src/shim_camera_win.cpp src/shim_file_source_win.cpp)
 else()
-  list(APPEND _rtc_sources src/shim_camera_stub.cpp src/shim_file_source_stub.cpp)
+  list(APPEND _rtc_sources src/shim_audio_stub.cpp src/shim_camera_stub.cpp src/shim_file_source_stub.cpp)
 endif()
 
 add_library(rtc_shim SHARED ${_rtc_sources})
@@ -74,7 +74,7 @@ target_link_libraries(rtc_shim PRIVATE libwebrtc)
 if(MSVC)
   target_compile_definitions(rtc_shim PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE _WIN32_WINNT=0x0A00)
   target_compile_options(rtc_shim PRIVATE /W4 /permissive- /utf-8 /EHsc /wd4100)
-  target_link_libraries(rtc_shim PRIVATE mf mfplat mfreadwrite mfuuid ole32 propsys)
+  target_link_libraries(rtc_shim PRIVATE mf mfplat mfreadwrite mfuuid ole32 propsys wmcodecdspuuid)
   # Strip debug info into a PDB but keep the DLL small.
   target_link_options(rtc_shim PRIVATE /DEBUG /OPT:REF /OPT:ICF)
 else()

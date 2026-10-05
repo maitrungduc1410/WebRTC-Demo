@@ -95,7 +95,7 @@ void RTC_CALL rtc_set_log_callback(int32_t min_severity, rtc_log_cb cb, void* us
 rtc_factory* RTC_CALL rtc_factory_create(void) {
   return Guard<rtc_factory*>(nullptr, __func__, []() -> rtc_factory* {
     scoped_refptr<RTCPeerConnectionFactory> factory = LibWebRTC::CreateRTCPeerConnectionFactory();
-    if (!factory || !factory->Initialize()) {
+    if (!factory || !InitializeFactory(factory.get())) {
       SetLastError("rtc_factory_create: factory initialization failed");
       return nullptr;
     }

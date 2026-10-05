@@ -152,6 +152,15 @@ options every client uses (ARCHITECTURE.md §9.3). The camera, the screen/window
 "custom" source (fed I420 frames) are all video sources; the file source reads with Media
 Foundation on its own thread.
 
+**Echo cancellation.** The microphone is captured by libwebrtc's WASAPI audio device and
+echo-cancelled by libwebrtc's AEC3. By default that audio device would hand
+echo cancellation to Windows' voice-capture DMO, which only captures while something is playing:
+a call's sending usually starts before any audio arrives (always in a group call, whose publish
+connection only sends), recording then fails and is never retried, and when playout stops the
+DMO's capture thread ends for good, so the others hear nothing. The audio device creates the DMO
+once, when the factory initializes, so `rtc_factory_create` registers a COM class object for it
+that refuses to make one during that call (`shim_audio_win.cpp`).
+
 **Interop.** `LibraryImport` (source-generated, trimming and AOT safe), one `SafeHandle` type per
 native object, and `UnmanagedCallersOnly` callbacks that find their managed target through an id
 registry (no GCHandles to leak). Exceptions never unwind into native code.
@@ -293,6 +302,11 @@ On screen:
 - **A black toolbar above the window content while debugging**: that is Visual Studio's XAML
   in-app toolbar (Live Visual Tree, element selection), not part of the app. Turn it off in Tools ›
   Options › Debugging › XAML Hot Reload › *Show runtime tools in application*.
+- **The others can't hear you**: rebuild the shim (`build-shim.ps1`); an older one leaves echo
+  cancellation to Windows' voice-capture DMO (see *Echo cancellation* above). In a Debug run with
+  `WEBRTC_DEMO_LOG=info`, the Output window shows `voice-capture DMO kept out of the audio device;
+  AEC3 cancels echo` at startup. `Playout must be started before recording when using the
+  built-in AEC` in a call means the DMO is still in use.
 - **Microphone or speaker unplugged mid-call**: within about 2 s the call moves to the Windows
   default communications device (the first in the list if that is unknown) and says "Switched
   to …"; with no microphone left it turns the mic off and tells the others. The audio sender, its
