@@ -179,9 +179,11 @@ unit tested anywhere.
 
 **App.** WinUI 3 with the UI built in C# (no XAML pages). That keeps it to plain C# that the
 compiler checks on any OS (`scripts/verify.sh`), and bindings are explicit
-(`Ui/Bindings.cs`). Video goes to a `SwapChainPanel`: frames are uploaded into a D3D11 composition
-swap chain the size of the frame, and the swap chain's matrix scales it to cover the view. As on
-iOS, Android and macOS, fit only scales that cover-sized panel down, on its composition visual,
+(`Ui/Bindings.cs`). Video goes to a composition sprite: frames are uploaded with D3D11 into a
+drawing surface the size of the frame, and the sprite's brush stretches it to cover the view. (A
+`SwapChainPanel` is drawn by Windows below WinUI's rendering, so a rounded tile couldn't clip its
+corners; the compositor draws a drawing surface itself, so it can.) As on
+iOS, Android and macOS, fit only scales that cover-sized sprite down,
 with a spring (damping 0.86, 0.5 s period), so double-clicking a remote video (or a screen share
 starting or stopping) zooms smoothly on the GPU without a layout pass or a redraw. It jumps on
 the first frame, when Windows turns animations off, and when the fit is chosen in reaction to a

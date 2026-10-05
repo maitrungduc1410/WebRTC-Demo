@@ -16,8 +16,8 @@ namespace WebRtcDemo.App.Video;
 /// frames instead of queueing them.
 /// <para>
 /// As on iOS, Android and macOS, the video is always laid out just large enough to cover the view
-/// (the clip crops the rest); fit only scales it down, on the panel's composition visual. So a
-/// fit/fill change is a GPU-only spring: no layout, no swap chain change, no redraw at another size.
+/// (the clip crops the rest); fit only scales it down, on its composition visual. So a fit/fill
+/// change is a GPU-only spring: no layout, no surface change, no redraw at another size.
 /// </para>
 /// </summary>
 internal sealed class VideoView : Grid
@@ -27,24 +27,21 @@ internal sealed class VideoView : Grid
     private static readonly TimeSpan SpringPeriod = TimeSpan.FromSeconds(0.5);
     private static readonly Windows.UI.ViewManagement.UISettings SystemSettings = new();
 
-    // A Canvas never clips or constrains the oversized panel; a Grid would give it a layout clip
-    // in the panel's own coordinates, which the fit scale would shrink with the video.
-    // Not hit-testable: the filled panel overflows the view, and input over a neighbouring tile
-    // must reach that tile; the view's own background takes it within its bounds.
+    /// <summary>Holds the video's visuals; the view's own background takes input within its bounds.</summary>
     private readonly Canvas _host = new() { IsHitTestVisible = false };
-    private readonly SwapChainPanel _panel = new();
-    private readonly Visual _visual;
+    /// <summary>The view's size, clipping the oversized video to it, with rounded corners.</summary>
+    private readonly ContainerVisual _root;
+    /// <summary>The video, at the cover size and centred; fit scales it about its centre.</summary>
+    private readonly SpriteVisual _visual;
     private SpringVector3NaturalMotionAnimation? _spring;
     private bool _laidOut;
     /// <summary>The frame or the view changed size since the last composition tick.</summary>
     private bool _sizeChangedThisTick;
     private float _fitScale = 1;
-    private readonly RectangleGeometry _clip = new();
-    /// <summary>On the host's visual: CornerRadius, the view's or a parent's, doesn't clip a swap chain.</summary>
-    private readonly CompositionRoundedRectangleGeometry _roundedClip;
+    private readonly CompositionRoundedRectangleGeometry _clip;
     private double _rounding;
     private readonly Lock _gate = new();
-    private SwapChainRenderer? _renderer;
+    private SurfaceRenderer? _renderer;
     private IVideoFeed? _feed;
     private IDisposable? _subscription;
     private bool _rendering;
@@ -64,17 +61,20 @@ internal sealed class VideoView : Grid
     public VideoView()
     {
         Background = new SolidColorBrush(Microsoft.UI.Colors.Black);
-        Clip = _clip;
-        _host.Children.Add(_panel);
         Children.Add(_host);
-        _visual = ElementCompositionPreview.GetElementVisual(_panel);
-        var hostVisual = ElementCompositionPreview.GetElementVisual(_host);
-        _roundedClip = hostVisual.Compositor.CreateRoundedRectangleGeometry();
-        hostVisual.Clip = hostVisual.Compositor.CreateGeometricClip(_roundedClip);
+        var compositor = ElementCompositionPreview.GetElementVisual(_host).Compositor;
+        _clip = compositor.CreateRoundedRectangleGeometry();
+        _root = compositor.CreateContainerVisual();
+        _root.Clip = compositor.CreateGeometricClip(_clip);
+        _visual = compositor.CreateSpriteVisual();
+        _visual.IsVisible = false;
+        _root.Children.InsertAtTop(_visual);
+        ElementCompositionPreview.SetElementChildVisual(_host, _root);
         SizeChanged += (_, _) =>
         {
-            _clip.Rect = new Windows.Foundation.Rect(0, 0, ActualWidth, ActualHeight);
-            _roundedClip.Size = new Vector2((float)ActualWidth, (float)ActualHeight);
+            var size = new Vector2((float)ActualWidth, (float)ActualHeight);
+            _root.Size = size;
+            _clip.Size = size;
             UpdateLayoutRect(animate: false);
             _sizeChangedThisTick = true;
         };
@@ -138,7 +138,7 @@ internal sealed class VideoView : Grid
         {
             _rounding = value;
             CornerRadius = new CornerRadius(value);
-            _roundedClip.CornerRadius = new Vector2((float)value);
+            _clip.CornerRadius = new Vector2((float)value);
         }
     }
 
@@ -169,7 +169,7 @@ internal sealed class VideoView : Grid
             if (active) CompositionTarget.Rendering += OnRendering;
             else CompositionTarget.Rendering -= OnRendering;
         }
-        _panel.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        _visual.IsVisible = active;
     }
 
     /// <summary>On a WebRTC thread: keep a tightly packed copy of the newest frame.</summary>
@@ -208,7 +208,7 @@ internal sealed class VideoView : Grid
             height = _incomingHeight;
         }
         var created = _renderer == null;
-        _renderer ??= new SwapChainRenderer(_panel);
+        _renderer ??= new SurfaceRenderer(_visual);
         _renderer.Draw(_drawing, width, height);
         var resized = width != _frameWidth || height != _frameHeight;
         _frameWidth = width;
@@ -223,24 +223,17 @@ internal sealed class VideoView : Grid
     }
 
     /// <summary>
-    /// Lays the panel out at the cover size, centred (only when the frame size or the view
-    /// changes), and scales its visual to the fit.
+    /// Lays the video out at the cover size, centred (only when the frame size or the view
+    /// changes), and scales it to the fit. The surface stays at the frame's size; the brush
+    /// stretches it.
     /// </summary>
     private void UpdateLayoutRect(bool animate)
     {
         if (VideoLayout.CoverScale(_frameWidth, _frameHeight, ActualWidth, ActualHeight) is not { } cover) return;
-        var width = _frameWidth * cover;
-        var height = _frameHeight * cover;
-        if (_panel.Width != width || _panel.Height != height)
-        {
-            _panel.Width = width;
-            _panel.Height = height;
-            _visual.CenterPoint = new Vector3((float)(width / 2), (float)(height / 2), 0);
-        }
-        Canvas.SetLeft(_panel, (ActualWidth - width) / 2);
-        Canvas.SetTop(_panel, (ActualHeight - height) / 2);
-        // The swap chain stays at the frame's size; this is only its matrix, DIPs per frame pixel.
-        if (_renderer != null) _renderer.Scale = (float)cover;
+        var size = new Vector2((float)(_frameWidth * cover), (float)(_frameHeight * cover));
+        _visual.Size = size;
+        _visual.CenterPoint = new Vector3(size / 2, 0);
+        _visual.Offset = new Vector3(((float)ActualWidth - size.X) / 2, ((float)ActualHeight - size.Y) / 2, 0);
         _laidOut = true;
         ApplyFitScale((float)VideoLayout.FitScale(_fit, _frameWidth, _frameHeight, ActualWidth, ActualHeight), animate);
     }
