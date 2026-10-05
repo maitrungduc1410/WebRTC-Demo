@@ -9,7 +9,7 @@ namespace WebRtcDemo.Core.Media;
 /// <summary>Where the effects assets are, and how model sessions are created (hardware acceleration).</summary>
 /// <param name="EffectsDirectory">The shared effects folder (backgrounds.json, stickers.json).</param>
 /// <param name="ModelsDirectory">The ONNX models.</param>
-public sealed record EffectsSetup(string EffectsDirectory, string ModelsDirectory, SessionOptionsFactory Sessions);
+public sealed record EffectsSetup(string EffectsDirectory, string ModelsDirectory, SessionOptionsFactory Sessions, Action<string>? Log = null);
 
 /// <summary>
 /// <see cref="ICallMedia"/> over the native shim. The video sender is created once per peer
@@ -128,7 +128,7 @@ public sealed class NativeCallMedia : ICallMedia
         if (effects != null && Directory.Exists(effects.ModelsDirectory))
         {
             EffectsCatalog = EffectsCatalog.Load(effects.EffectsDirectory);
-            _effectsModels = new EffectsModels(effects.ModelsDirectory, effects.Sessions);
+            _effectsModels = new EffectsModels(effects.ModelsDirectory, effects.Sessions, effects.Log);
         }
     }
 

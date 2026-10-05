@@ -172,8 +172,13 @@ public sealed class FakeCallMedia : ICallMedia
         return Task.FromResult(!enabled || CameraReopens);
     }
 
+    /// <summary>False: opening a camera fails, as when another app has it.</summary>
+    public bool CameraOpens { get; set; } = true;
+
     public Task<bool> SelectCameraAsync(string id)
     {
+        Log.Add($"SelectCamera({id})");
+        if (!CameraOpens) return Task.FromResult(false);
         CameraId = id;
         return Task.FromResult(true);
     }

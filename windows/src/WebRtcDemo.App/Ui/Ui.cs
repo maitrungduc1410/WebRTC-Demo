@@ -42,7 +42,10 @@ internal static class UiFactory
 
     public static readonly SolidColorBrush Transparent = new(Colors.Transparent);
 
-    /// <summary>A brush from the theme dictionaries (follows the element's theme when set at load).</summary>
+    /// <summary>
+    /// A brush from the app's theme dictionaries: the app theme's, not the element's, so the dark
+    /// call screen and its flyouts use fixed colours instead.
+    /// </summary>
     public static Brush ThemeBrush(string key) => (Brush)Application.Current.Resources[key];
 
     public static T With<T>(this T element, Action<T> configure) where T : DependencyObject

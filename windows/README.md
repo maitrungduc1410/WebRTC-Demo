@@ -133,8 +133,8 @@ libwebrtc aborts when no audio device exists.
 | Fit or fill the remote video (auto-fit for screen shares; double-click to toggle, per tile in a group) | ✅ |
 | Placeholder with blurred last frame, gradient avatar, voice ring | ✅ |
 | Picture-in-picture (always-on-top compact window; the active speaker in a group call) | ✅ |
-| Draggable self view that springs to a corner, labelled "You" with a red mic-off badge while muted | ✅ |
-| Your microphone's level on the self view (three bars, also while waiting alone) | ✅ |
+| Self view filling the stage while you are alone, then a draggable tile that springs to a corner, labelled "You" with a red mic-off badge while muted | ✅ |
+| Your microphone's level on the self view (three bars; large on the left edge while waiting alone) | ✅ |
 | Keyboard: M mute, V camera, C chat, B backgrounds and effects, F fit (1:1 only), P picture-in-picture, Esc closes the chat | ✅ |
 | Live server status in the lobby (signaling server or SFU) | ✅ |
 | Backgrounds: none, slight blur, blur, pictures, looping videos | ✅ |
@@ -193,8 +193,10 @@ publish connection (a group call shows nothing until that opens, as on iOS). Wai
 captures the selected microphone (by its endpoint ID, the default communications device while
 none is picked) in shared mode on its own thread. It restarts when the microphone changes (a pick
 or an unplug fallback), and it stops when you mute, leave, or the call's connection opens, before
-WebRTC starts recording. The other clients' large variant, for a self view that fills the stage,
-isn't used: here the self view is always a corner tile, and the waiting card holds the stage.
+WebRTC starts recording. While you are alone the self view fills the stage (the waiting card sits
+above the toolbar), and the level is the large variant instead: 48 px, bars 5 px wide and 5 to
+22 px tall, 24 px from the left edge and vertically centred, turning red with a crossed-out mic
+while muted. When someone joins, the self view shrinks into its corner with a spring.
 
 **Effects.** "Backgrounds and effects" (toolbar, More, or `B`) opens a panel in the chat's
 place with a live preview of what is sent and two tabs, Backgrounds and Filters, reading the
@@ -202,7 +204,13 @@ repository's [`effects`](../effects) folder (linked into the app output). Only t
 processed, and not while sharing. The models are MediaPipe's `selfie_segmenter` and
 `face_landmarker` (the files the Android app bundles), converted to ONNX by
 [`models/convert.sh`](models/convert.sh), and run by ONNX Runtime through Windows ML, which
-picks the GPU or NPU provider certified for the PC and falls back to the CPU. The camera's
+picks the GPU or NPU provider certified for the PC and falls back to the CPU. Inputs are bound
+again before every run, because binding is when ONNX Runtime copies an input to the GPU. A model
+that runs without an error but returns nonsense (an empty mask blurs the whole picture, no face
+means no sticker) is caught too: an accelerated model's first runs are also done on the CPU and
+compared, and in a Debug build Visual Studio's Output window shows
+`Effects: selfie_segmenter on the GPU/NPU matches the CPU.` or
+`... gives wrong results on the GPU/NPU (N% off the CPU); it runs on the CPU.` The camera's
 frames (up to 720p) go to `EffectsProcessor`: the person mask and the face points run on their
 own threads on a 512 px copy, while every frame is composited on the CPU and pushed as I420 into
 a custom source whose track replaces the camera's on the sender. The choice is saved, and a call
@@ -267,6 +275,9 @@ On screen:
 - **`rtc_shim ABI … does not match`**: the DLL is older than the bindings; rebuild the shim.
 - **No camera or microphone**: check the Windows privacy settings above; the call still works
   receive-only, and a notice on the call screen says what is missing.
+- **"No camera found" while the camera works elsewhere**: Windows gives a camera to one app at
+  a time, so it fails while a browser tab or another app has it. Close that, then turn the camera
+  on (V); it is opened again.
 - **Your own video stays black**: check that the Camera app shows the camera, that no other app is
   using it, and that *Let desktop apps access your camera* is on. If several cameras are listed,
   pick another one from the menu next to the camera button: a virtual camera (OBS and the like)

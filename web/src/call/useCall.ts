@@ -193,12 +193,13 @@ function createCall() {
     await mediaReady
     if (!inRoom.value) return
     if (!peerConnection) {
-      peerConnection = createPeerConnection()
+      peerConnection = createPeerConnection(false)
     }
     const pc = peerConnection
     try {
       await pc.setRemoteDescription({ type: 'offer', sdp })
       if (pc !== peerConnection) return
+      prepareVideoSender(pc)
       await addPendingCandidates(pc)
       applyE2EECodecPreferences()
       const answer = await pc.createAnswer()
@@ -276,7 +277,7 @@ function createCall() {
   async function startCall() {
     // "peer joined" while a call exists means the remote left and came back
     onDisconnected()
-    const pc = createPeerConnection()
+    const pc = createPeerConnection(true)
     peerConnection = pc
     applyE2EECodecPreferences()
     // Negotiated with the first offer: opening the chat later must not renegotiate the call.
@@ -301,12 +302,17 @@ function createCall() {
     }
   }
 
-  function createPeerConnection() {
+  /** @param offering We make the offer; otherwise the remote offer brings the m-lines. */
+  function createPeerConnection(offering: boolean) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     negotiating.value = true
 
     for (const track of [media.micTrack(), media.outgoingVideoTrack()]) {
       if (track) pc.addTrack(track, media.sendStream())
+    }
+    // Without a camera, still offer to send video, so one that opens later only replaces the track.
+    if (offering && !media.outgoingVideoTrack()) {
+      pc.addTransceiver('video', { direction: 'sendrecv', streams: [media.sendStream()] })
     }
 
     // Events of a replaced connection must not touch the current one.
@@ -352,18 +358,38 @@ function createCall() {
       initDataChannelEvents(event.channel)
     }
 
-    if (e2ee.value) {
-      pc.getSenders().forEach(sender => {
-        const kind = sender.track?.kind
-        if (kind === 'video' || kind === 'audio') frameCrypto.attach(sender, 'encrypt', kind)
-      })
-      pc.getReceivers().forEach(receiver => {
-        const kind = receiver.track.kind
-        if (kind === 'video' || kind === 'audio') frameCrypto.attach(receiver, 'decrypt', kind)
-      })
-    }
-
+    attachCryptors(pc)
     return pc
+  }
+
+  /** Every sender (with a track or not yet) and receiver gets its cryptor before media flows. */
+  function attachCryptors(pc: RTCPeerConnection) {
+    if (!e2ee.value) return
+    pc.getTransceivers().forEach(transceiver => {
+      const kind = transceiver.receiver.track.kind
+      if (kind !== 'video' && kind !== 'audio') return
+      frameCrypto.attach(transceiver.sender, 'encrypt', kind)
+      frameCrypto.attach(transceiver.receiver, 'decrypt', kind)
+    })
+  }
+
+  /**
+   * Answering without a camera: the offer's video m-line came in receive-only on our side; answer
+   * that we send too (nothing until a camera opens), so a camera later only replaces the track.
+   */
+  function prepareVideoSender(pc: RTCPeerConnection) {
+    pc.getTransceivers().forEach(transceiver => {
+      // Our own addTrack() transceivers are sendrecv already.
+      if (transceiver.receiver.track.kind !== 'video' || transceiver.mid === null || transceiver.direction !== 'recvonly') return
+      transceiver.direction = 'sendrecv'
+      transceiver.sender.setStreams?.(media.sendStream())
+      // A camera that opened while the offer was being applied had no sender to go to yet.
+      const track = media.outgoingVideoTrack()
+      if (track && !transceiver.sender.track) {
+        transceiver.sender.replaceTrack(track).catch(error => console.warn('Video track not attached:', error))
+      }
+    })
+    attachCryptors(pc)
   }
 
   function publishRemoteStream() {

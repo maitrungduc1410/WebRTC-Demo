@@ -351,6 +351,8 @@ flowchart TB
 
 Each source has its own track: microphone, camera, screen, video file, and the canvas track of the effects. `outgoingVideoTrack()` picks the one to send (screen or file while sharing, else the effects canvas when an effect is on, else the camera), and `syncVideo()` puts it on the video sender with `replaceTrack()` and updates the local preview. The sender (and its E2EE transform) stays the same, so no renegotiation is needed. The microphone track is never replaced, so muting keeps working while sharing.
 
+A call can start without a camera: another app has it (Windows gives a camera to one app at a time, so whichever of the browser and the Windows app asks second gets nothing), none is plugged in, or access is blocked. The video sender exists anyway. The 1:1 offerer adds a `sendrecv` video transceiver without a track, and the answerer turns the offer's `recvonly` video transceiver into `sendrecv` before answering. The group publish PC always has its `sendonly` one. Turning the camera on then calls `getUserMedia` again, and a camera that opens only needs `replaceTrack()`. Otherwise a toast says why it failed (in use by another app, blocked, or none). The Windows client works the same way: its sender carries a placeholder track, and turning the camera on opens it again.
+
 ```mermaid
 flowchart LR
     CAM["Camera<br/>getUserMedia"] --> SEL{"outgoingVideoTrack()"}
@@ -856,7 +858,7 @@ flowchart LR
     ORT -.-> FL
 ```
 
-The models are MediaPipe's, converted to ONNX by `windows/models/convert.sh` (pinned tf2onnx, byte-reproducible, checked against `SHA256SUMS`). At launch the app registers the execution providers Windows ML certifies for the PC and asks for the GPU; without them, or if a provider rejects a model, the session runs on the CPU. While a model is busy, frames reuse its previous result, so a slow model lowers the update rate of the mask, not the frame rate.
+The models are MediaPipe's, converted to ONNX by `windows/models/convert.sh` (pinned tf2onnx, byte-reproducible, checked against `SHA256SUMS`). At launch the app registers the execution providers Windows ML certifies for the PC and asks for the GPU; without them, or if a provider rejects a model, the session runs on the CPU. `OnnxModel` binds each input and output once to a preallocated buffer, but binds the inputs again before every run: binding is when ONNX Runtime copies a CPU input to the device that needs it, so a GPU session bound once would run every frame on the buffer as it was at construction (all zeros: an empty mask, so the whole picture is background, and no face). As a safety net for that kind of silent failure, an accelerated session's first frames also run on a CPU session sharing the input buffers. If an output differs by more than 10% (relative L1), it keeps the CPU result and stays on the CPU. Once a frame with something in it agrees, it drops the CPU session; after 100 frames without one (nobody in front of the camera), it checks only every 30th. Debug builds log either outcome. While a model is busy, frames reuse its previous result, so a slow model lowers the update rate of the mask, not the frame rate.
 
 Switching cameras, turning the camera back on and returning from a presentation all invalidate the last mask and face points (and drop any frame still waiting from before) before new camera frames reach the processor. On hang-up the processor's camera sink is detached first, and the processor is disposed on the thread pool, since joining its model threads can take a moment after a first GPU run.
 

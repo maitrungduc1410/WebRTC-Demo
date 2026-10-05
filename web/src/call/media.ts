@@ -71,6 +71,8 @@ export function createLocalMedia(hooks: LocalMediaHooks) {
   let effectsRequest = 0
   let effectsWork: Promise<void> = Promise.resolve()
   let mediaStateTimer: ReturnType<typeof setTimeout> | null = null
+  let startWork: Promise<void> = Promise.resolve()
+  let openingCamera = false
   let meter: { context: AudioContext; timer: ReturnType<typeof setInterval> } | null = null
 
   function mediaState(): MediaState {
@@ -100,7 +102,12 @@ export function createLocalMedia(hooks: LocalMediaHooks) {
     if (sender && sender.track !== track) await sender.replaceTrack(track)
   }
 
-  async function start() {
+  function start() {
+    startWork = startNow()
+    return startWork
+  }
+
+  async function startNow() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: CAMERA_CONSTRAINTS })
       micTrack = stream.getAudioTracks()[0] ?? null
@@ -131,14 +138,19 @@ export function createLocalMedia(hooks: LocalMediaHooks) {
     // A choice made while it loads replaces it, so wait for whichever load is the latest.
     if (cameraTrack && hasEffects(effects.value)) {
       applyEffects()
-      let work: Promise<void>
-      do {
-        work = effectsWork
-        await work
-      } while (work !== effectsWork)
+      await effectsSettled()
     }
     await syncVideo()
     refreshCameras()
+  }
+
+  /** Waits for the latest effects load; a choice made while one loads replaces it. */
+  async function effectsSettled() {
+    let work: Promise<void>
+    do {
+      work = effectsWork
+      await work
+    } while (work !== effectsWork)
   }
 
   /** Releases every source and resets the settings for the next call. */
@@ -237,7 +249,14 @@ export function createLocalMedia(hooks: LocalMediaHooks) {
 
   async function ensureCamera() {
     if (cameraTrack && cameraTrack.readyState === 'live') return
-    cameraTrack = await getTrack({ video: CAMERA_CONSTRAINTS })
+    const track = await getTrack({ video: CAMERA_CONSTRAINTS })
+    // Turning the camera on may have opened it meanwhile; keep one.
+    if (cameraTrack && cameraTrack.readyState === 'live') {
+      track?.stop()
+      return
+    }
+    cameraTrack?.stop()
+    cameraTrack = track
     processor?.setSource(cameraTrack)
   }
 
@@ -251,9 +270,13 @@ export function createLocalMedia(hooks: LocalMediaHooks) {
     hooks.sendMediaState()
   }
 
-  function toggleCamera() {
+  async function toggleCamera() {
     // The camera is closed while presenting.
-    if (sharing.value !== 'none') return
+    if (sharing.value !== 'none' || openingCamera) return
+    if (cameraMissing()) {
+      await openCamera()
+      return
+    }
     const track = outgoingVideoTrack()
     if (!track) {
       hooks.emit({ type: 'error', message: 'No camera available.' })
@@ -275,6 +298,59 @@ export function createLocalMedia(hooks: LocalMediaHooks) {
         if (cameraTrack) cameraTrack.enabled = false
       }, MEDIA_STATE_DELAY_MS)
     }
+  }
+
+  /**
+   * There was no camera when the call started: another app had it (Windows gives a camera to one
+   * app at a time), it was plugged in since, or access was granted since. Turning it on tries again.
+   * The engines keep a video sender without a track, so this needs no renegotiation.
+   */
+  async function openCamera() {
+    openingCamera = true
+    let track: MediaStreamTrack | null = null
+    let failure: unknown
+    try {
+      // The call's own first try may still be running; two would leave one camera open.
+      await startWork.catch(() => {})
+      if (!cameraMissing()) return
+      track = (await navigator.mediaDevices.getUserMedia({ video: CAMERA_CONSTRAINTS })).getVideoTracks()[0] ?? null
+    } catch (error) {
+      failure = error
+    } finally {
+      openingCamera = false
+    }
+    if (!hooks.inCall() || sharing.value !== 'none') {
+      track?.stop()
+      return
+    }
+    if (!track) {
+      hooks.emit({ type: 'error', message: cameraFailure(failure) })
+      return
+    }
+    cameraTrack?.stop()
+    cameraTrack = track
+    cameraOn.value = true
+    processor?.setSource(track)
+    if (!processor && hasEffects(effects.value)) {
+      applyEffects()
+      await effectsSettled()
+      if (!hooks.inCall()) return
+    }
+    await syncVideo()
+    if (mediaStateTimer) clearTimeout(mediaStateTimer)
+    mediaStateTimer = setTimeout(hooks.sendMediaState, MEDIA_STATE_DELAY_MS)
+    refreshCameras()
+  }
+
+  function cameraMissing() {
+    return !cameraTrack || (!cameraOn.value && cameraTrack.readyState === 'ended')
+  }
+
+  function cameraFailure(error: unknown) {
+    const name = error instanceof DOMException ? error.name : ''
+    if (name === 'NotReadableError' || name === 'AbortError') return 'The camera is in use by another app.'
+    if (name === 'NotAllowedError' || name === 'SecurityError') return 'Camera access is blocked.'
+    return 'No camera available.'
   }
 
   async function switchCamera(): Promise<boolean> {

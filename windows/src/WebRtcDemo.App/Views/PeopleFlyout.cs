@@ -76,7 +76,7 @@ internal sealed class PeopleFlyout : IDisposable
                 {
                     Column(2,
                         _count,
-                        Text("Others see you by the name on your row.", 13, foreground: ThemeBrush("TextFillColorSecondaryBrush"))),
+                        Text("Others see you by the name on your row.", 13, foreground: White(0xB3))),
                     new ScrollViewer { MaxHeight = 420, Content = _rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
                 },
             };
@@ -165,7 +165,7 @@ internal sealed class PeopleFlyout : IDisposable
             OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(200) },
         };
         private readonly FontIcon _cameraOff;
-        private readonly StatusSlot _status = new(ThemeBrush("TextFillColorPrimaryBrush"));
+        private readonly StatusSlot _status = new(White());
 
         public PersonRow(string label, string seed, bool you)
         {
@@ -188,7 +188,7 @@ internal sealed class PeopleFlyout : IDisposable
             };
             _cameraOff = Icon(Glyphs.VideoOff, 14).With(i =>
             {
-                i.Foreground = ThemeBrush("TextFillColorSecondaryBrush");
+                i.Foreground = White(0xB3);
                 i.VerticalAlignment = VerticalAlignment.Center;
             }).Tip("Camera off");
             var row = new Grid { ColumnSpacing = 12 };

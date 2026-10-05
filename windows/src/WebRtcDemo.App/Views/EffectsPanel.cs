@@ -21,7 +21,6 @@ namespace WebRtcDemo.App.Views;
 /// </summary>
 internal sealed class EffectsPanel : Grid, IDisposable
 {
-    private const double ContentWidth = ChatPanel.PanelWidth - 32;
     private const double TileGap = 8;
     private const int ThumbnailWidth = 320;
     private const float SelectedScale = 0.94f;
@@ -180,12 +179,10 @@ internal sealed class EffectsPanel : Grid, IDisposable
     private void AddSection(StackPanel content, string title, List<BackgroundOption> options)
     {
         if (options.Count == 0) return;
-        const int columns = 3;
-        var width = (ContentWidth - TileGap * (columns - 1)) / columns;
-        var grid = TileGrid(width, width * 9 / 16, columns);
+        var grid = TileGrid(columns: 3);
         foreach (var option in options)
         {
-            var tile = new Tile(width, width * 9 / 16, option.Name);
+            var tile = new Tile(9.0 / 16, option.Name);
             switch (option.Kind)
             {
                 case BackgroundKind.None:
@@ -201,7 +198,7 @@ internal sealed class EffectsPanel : Grid, IDisposable
             var id = option.Id;
             tile.Click += (_, _) => _vm.SetBackground(id);
             _backgroundTiles.Add((tile, id));
-            grid.Children.Add(tile);
+            AddTile(grid, tile);
         }
         content.Children.Add(SectionTitle(title));
         content.Children.Add(grid);
@@ -209,22 +206,20 @@ internal sealed class EffectsPanel : Grid, IDisposable
 
     private StackPanel FiltersContent()
     {
-        const int columns = 4;
-        var width = (ContentWidth - TileGap * (columns - 1)) / columns;
-        var grid = TileGrid(width, width, columns);
-        var none = new Tile(width, width, "No filter");
+        var grid = TileGrid(columns: 4);
+        var none = new Tile(1, "No filter");
         none.SetGlyph(Glyphs.Close, "No filter", Brush(0x2E2E35));
         none.Click += (_, _) => _vm.SetSticker(null);
         _stickerTiles.Add((none, null));
-        grid.Children.Add(none);
+        AddTile(grid, none);
         foreach (var sticker in _vm.EffectsCatalog.Stickers)
         {
-            var tile = new Tile(width, width, sticker.Name);
+            var tile = new Tile(1, sticker.Name);
             tile.SetSticker(sticker.File);
             var id = sticker.Id;
             tile.Click += (_, _) => _vm.SetSticker(id);
             _stickerTiles.Add((tile, id));
-            grid.Children.Add(tile);
+            AddTile(grid, tile);
         }
         var content = new StackPanel { Spacing = 8 };
         content.Children.Add(SectionTitle("Face filters"));
@@ -241,14 +236,21 @@ internal sealed class EffectsPanel : Grid, IDisposable
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
     };
 
-    private static VariableSizedWrapGrid TileGrid(double width, double height, int columns) => new()
+    /// <summary>Equal columns sharing whatever width the page has (web: grid-cols-N gap-2.5).</summary>
+    private static Grid TileGrid(int columns)
     {
-        Orientation = Orientation.Horizontal,
-        MaximumRowsOrColumns = columns,
-        ItemWidth = width + TileGap,
-        ItemHeight = height + TileGap,
-        Margin = new Thickness(0, 0, -TileGap, 0),
-    };
+        var grid = new Grid { ColumnSpacing = TileGap, RowSpacing = TileGap };
+        for (var i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition());
+        return grid;
+    }
+
+    private static void AddTile(Grid grid, Tile tile)
+    {
+        var index = grid.Children.Count;
+        var columns = grid.ColumnDefinitions.Count;
+        if (index % columns == 0) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.Children.Add(tile.Grid(row: index / columns, column: index % columns));
+    }
 
     private static TextBlock SectionTitle(string text) =>
         Text(text, 13, FontWeights.SemiBold, White(0xB0)).With(t => t.Margin = new Thickness(0, 8, 0, 0));
@@ -266,16 +268,15 @@ internal sealed class EffectsPanel : Grid, IDisposable
         private readonly Grid _body = new();
         private readonly string _name;
 
-        public Tile(double width, double height, string name)
+        /// <param name="aspect">Height over width; the width is the grid column's.</param>
+        public Tile(double aspect, string name)
         {
             _name = name;
-            Width = width;
-            Height = height;
             Padding = new Thickness(0);
             Background = Transparent;
             BorderThickness = new Thickness(0);
             CornerRadius = new CornerRadius(12);
-            HorizontalAlignment = HorizontalAlignment.Left;
+            HorizontalAlignment = HorizontalAlignment.Stretch;
             VerticalAlignment = VerticalAlignment.Top;
             HorizontalContentAlignment = HorizontalAlignment.Stretch;
             VerticalContentAlignment = VerticalAlignment.Stretch;
@@ -288,7 +289,11 @@ internal sealed class EffectsPanel : Grid, IDisposable
                 Child = _body,
             };
             Content = _frame;
-            CenterPoint = new Vector3((float)width / 2, (float)height / 2, 0);
+            SizeChanged += (_, e) =>
+            {
+                Height = Math.Round(e.NewSize.Width * aspect);
+                CenterPoint = new Vector3((float)e.NewSize.Width / 2, (float)Height / 2, 0);
+            };
             ScaleTransition = new Vector3Transition { Duration = TimeSpan.FromMilliseconds(150) };
             this.Tip(name);
             AutomationProperties.SetName(this, name);

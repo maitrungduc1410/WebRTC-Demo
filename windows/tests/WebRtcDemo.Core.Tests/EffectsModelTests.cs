@@ -206,6 +206,66 @@ public sealed class EffectsModelTests : IDisposable
         reloaded.Dispose();
     }
 
+    private static OnnxModel CheckedSegmenterModel(List<string> log)
+    {
+        using var options = OnnxDefaults.Cpu("accelerated");
+        using var check = OnnxDefaults.Cpu("check");
+        return new OnnxModel(Path.Combine(s_models, SelfieSegmenter.FileName), options, check, message => log.Add(message));
+    }
+
+    [Fact]
+    public void An_accelerated_model_that_returns_nonsense_moves_to_the_cpu()
+    {
+        var log = new List<string>();
+        var model = CheckedSegmenterModel(log);
+        // A driver that runs without error and returns an empty mask.
+        model.Corrupt = outputs => Array.Clear(outputs[0]);
+        using var segmenter = new SelfieSegmenter(model);
+        segmenter.Run(Portrait());
+
+        // That very frame already has the CPU's mask.
+        Assert.True(model.OnCpu);
+        Assert.False(model.Checking);
+        Assert.InRange(MaskAt(segmenter.Mask, 245 / 500f, 140 / 624f), 0.9f, 1f);
+        Assert.InRange(MaskAt(segmenter.Mask, 30 / 500f, 200 / 624f), 0f, 0.1f);
+        Assert.Contains(log, m => m.Contains("selfie_segmenter gives wrong results", StringComparison.Ordinal));
+
+        segmenter.Run(Portrait());
+        Assert.InRange(MaskAt(segmenter.Mask, 245 / 500f, 140 / 624f), 0.9f, 1f);
+    }
+
+    [Fact]
+    public void An_accelerated_model_that_agrees_with_the_cpu_is_trusted_after_a_telling_frame()
+    {
+        var log = new List<string>();
+        var model = CheckedSegmenterModel(log);
+        using var segmenter = new SelfieSegmenter(model);
+
+        // An empty room says little: the check goes on.
+        var blank = new BgraBitmap(320, 240);
+        for (var run = 0; run < 5; run++) segmenter.Run(blank);
+        Assert.True(model.Checking);
+
+        segmenter.Reset();
+        segmenter.Run(Portrait());
+        Assert.False(model.Checking);
+        Assert.False(model.OnCpu);
+        Assert.Equal(["Effects: selfie_segmenter on the GPU/NPU matches the CPU."], log);
+        Assert.InRange(MaskAt(segmenter.Mask, 245 / 500f, 140 / 624f), 0.9f, 1f);
+    }
+
+    [Fact]
+    public async Task Face_models_are_checked_each_on_their_own()
+    {
+        var log = new List<string>();
+        using var models = new EffectsModels(s_models, OnnxDefaults.Cpu, message => { lock (log) log.Add(message); });
+        var face = await models.LoadFaceAsync();
+        var image = Portrait();
+        for (var run = 0; run < 2; run++) Assert.NotNull(face.Run(image));
+        Assert.Contains("Effects: face_detector on the GPU/NPU matches the CPU.", log);
+        Assert.Contains("Effects: face_landmarks_detector on the GPU/NPU matches the CPU.", log);
+    }
+
     [Fact]
     public async Task Retired_models_are_disposed_on_the_compositor_or_with_the_processor()
     {

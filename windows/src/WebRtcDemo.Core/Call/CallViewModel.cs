@@ -63,6 +63,7 @@ public sealed partial class CallViewModel : ObservableObject, IDisposable
     /// <summary>It broke again, so the camera was turned off; turning it on tries the effect again.</summary>
     private bool _effectsBroken;
     private int _effectsGeneration;
+    private bool _openingCamera;
     /// <summary>Video that arrived before the participant's info (either can come first).</summary>
     private readonly Dictionary<string, IVideoFeed> _orphanVideo = new(StringComparer.Ordinal);
     private readonly ActiveSpeaker _activeSpeaker = new();
@@ -964,10 +965,54 @@ public sealed partial class CallViewModel : ObservableObject, IDisposable
         if (IsPresenting) return;
         if (!HasCamera)
         {
-            Show("No camera available", ToastKind.Warning, Glyphs.VideoOff);
+            _ = OpenCameraAsync();
             return;
         }
         SetCameraOn(!CameraOn);
+    }
+
+    /// <summary>
+    /// There was no camera when the call started: another app had it (Windows gives a camera to one
+    /// app at a time), or it was plugged in since. Turning the camera on tries again.
+    /// </summary>
+    private async Task OpenCameraAsync()
+    {
+        if (_openingCamera) return;
+        var cameras = _media.Cameras;
+        var preferred = _media.CameraId ?? _settings?.Load()?.CameraId;
+        var camera = cameras.FirstOrDefault(c => c.Id == preferred) ?? (cameras.Count > 0 ? cameras[0] : null);
+        if (camera == null)
+        {
+            Show("No camera available", ToastKind.Warning, Glyphs.VideoOff);
+            return;
+        }
+        _openingCamera = true;
+        var call = _mediaReady;
+        bool opened;
+        try
+        {
+            opened = await _media.SelectCameraAsync(camera.Id);
+        }
+        catch (Exception)
+        {
+            opened = false;
+        }
+        finally
+        {
+            _openingCamera = false;
+        }
+        // Left (or left and joined again) meanwhile.
+        if (!InRoom || call != _mediaReady) return;
+        if (!opened)
+        {
+            Show("Couldn't open the camera. Another app may be using it.", ToastKind.Warning, Glyphs.VideoOff);
+            return;
+        }
+        HasCamera = true;
+        LocalMirrored = _media.LocalVideoIsCamera;
+        OnDevicesChanged();
+        // Presenting started meanwhile: the camera comes on when it stops, as asked.
+        SetCameraOn(true);
     }
 
     private void SetCameraOn(bool enable)

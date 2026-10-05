@@ -20,7 +20,8 @@ internal static class EffectsAcceleration
     public static EffectsSetup Setup() => new(
         Path.Combine(AppContext.BaseDirectory, "effects"),
         Path.Combine(AppContext.BaseDirectory, "models"),
-        CreateOptions);
+        CreateOptions,
+        App.Log);
 
     /// <summary>
     /// Starts registering the providers, once per process (at launch). Sessions created before it
@@ -49,20 +50,22 @@ internal static class EffectsAcceleration
     }
 
     // Called on a model-loading thread, never the UI thread.
-    private static SessionOptions CreateOptions(string model)
+    private static SessionOptions? CreateOptions(string model)
     {
+        if (s_registered is not { } registered) return null;
+        var wait = RegistrationBudget - s_sinceStart.Elapsed;
+        if (!registered.Wait(wait > TimeSpan.Zero ? wait : TimeSpan.Zero) || !registered.Result) return null;
         var options = OnnxDefaults.Cpu(model);
-        if (s_registered is not { } registered) return options;
         try
         {
-            var wait = RegistrationBudget - s_sinceStart.Elapsed;
-            if (registered.Wait(wait > TimeSpan.Zero ? wait : TimeSpan.Zero) && registered.Result)
-                options.SetEpSelectionPolicy(ExecutionProviderDevicePolicy.PREFER_GPU);
+            options.SetEpSelectionPolicy(ExecutionProviderDevicePolicy.PREFER_GPU);
+            return options;
         }
         catch (OnnxRuntimeException e)
         {
             App.Log("Effects stay on the CPU: " + e.Message);
+            options.Dispose();
+            return null;
         }
-        return options;
     }
 }

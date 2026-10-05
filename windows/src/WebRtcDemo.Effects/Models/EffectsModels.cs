@@ -28,9 +28,10 @@ public sealed class EffectsModelException : Exception
 /// <summary>
 /// Loads the models on first use and keeps them for the life of the app (a session takes a while
 /// to create, especially on a GPU). A failed load is retried on the next request; a model that
-/// failed while running is dropped with <see cref="MarkBroken"/> and comes back on the CPU.
+/// failed while running is dropped with <see cref="MarkBroken"/> and comes back on the CPU. An
+/// accelerated session is checked against the CPU on its first runs (<see cref="OnnxModel"/>).
 /// </summary>
-public sealed class EffectsModels(string directory, SessionOptionsFactory options) : IDisposable
+public sealed class EffectsModels(string directory, SessionOptionsFactory options, Action<string>? log = null) : IDisposable
 {
     private readonly Lock _lock = new();
     private Task<SelfieSegmenter>? _segmenter;
@@ -113,12 +114,13 @@ public sealed class EffectsModels(string directory, SessionOptionsFactory option
         var path = Path.Combine(Directory, file);
         if (!File.Exists(path)) throw new FileNotFoundException("Effects model is missing.", path);
         var model = Path.GetFileNameWithoutExtension(file);
-        if (!cpuOnly)
+        using var accelerated = cpuOnly ? null : options(model);
+        if (accelerated != null)
         {
             try
             {
-                using var sessionOptions = options(model);
-                return new OnnxModel(path, sessionOptions);
+                using var check = OnnxDefaults.Cpu(model);
+                return new OnnxModel(path, accelerated, check, log);
             }
             catch (Microsoft.ML.OnnxRuntime.OnnxRuntimeException)
             {

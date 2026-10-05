@@ -37,7 +37,7 @@ internal static class SharePicker
                 MinHeight = 240,
                 MaxHeight = 420,
             };
-            var status = Text("Looking for " + (screens ? "screens" : "windows") + "…", 13, foreground: ThemeBrush("TextFillColorSecondaryBrush"));
+            var status = Text("Looking for " + (screens ? "screens" : "windows") + "…", 13, foreground: White(0xB3));
             var dialog = new ContentDialog
             {
                 XamlRoot = root,

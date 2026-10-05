@@ -106,12 +106,16 @@ internal sealed class CallView : Grid, IDisposable
             }),
             CopyButton());
         _roomRow.HorizontalAlignment = HorizontalAlignment.Center;
+        // Alone, the self view is the stage behind it.
+        _local.Attach(_stage);
+        _stage.Children.Add(_local);
+        // Above the toolbar, as on the web, so it doesn't cover your face.
         _waiting = new Border
         {
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
             Padding = new Thickness(32, 28, 32, 28),
-            Margin = new Thickness(24),
+            Margin = WaitingMargin(pip: false),
             CornerRadius = new CornerRadius(16),
             Background = Brush(0x1E1E24, 0xE6),
             BorderBrush = White(0x1A),
@@ -124,9 +128,6 @@ internal sealed class CallView : Grid, IDisposable
                 _roomRow),
         };
         _stage.Children.Add(_waiting);
-
-        _local.Attach(_stage);
-        _stage.Children.Add(_local);
 
         // ---- Top bar ------------------------------------------------------------------------
         _timerChip = Chip(Icon("\uE916", 13).With(i => i.Foreground = Brush(0x6CCB5F)), _timer);
@@ -272,6 +273,8 @@ internal sealed class CallView : Grid, IDisposable
 
     private static Thickness GroupStageMargin(bool pip) => pip ? new Thickness(0) : new Thickness(16, TopInset, 16, BottomInset);
 
+    private static Thickness WaitingMargin(bool pip) => pip ? new Thickness(8, 8, 8, 86) : new Thickness(24, 24, 24, BottomInset + 12);
+
     // ---- Bindings ---------------------------------------------------------------------------
 
     private void Bind()
@@ -285,6 +288,7 @@ internal sealed class CallView : Grid, IDisposable
             _waitingTitle.Text = phase == CallPhase.Connecting ? "Connecting…" : "Waiting for someone to join";
             _roomRow.Visibility = Visible(phase == CallPhase.Waiting);
             UpdateWaitingSubtitle();
+            _local.SetWholeStage(!HasRemote);
             UpdateRemote();
             UpdateClock();
             if (phase != CallPhase.Connected) ShowControls();
@@ -502,6 +506,7 @@ internal sealed class CallView : Grid, IDisposable
         _more.Visibility = Visible(!pip);
         _exitPip.Visibility = Visible(pip);
         _waiting.Padding = pip ? new Thickness(16) : new Thickness(32, 28, 32, 28);
+        _waiting.Margin = WaitingMargin(pip);
         _toolbar.Margin = new Thickness(0, 0, 0, pip ? 8 : 20);
         _chat.Visibility = Visible(_vm.ChatOpen && !pip);
         _effectsPanel.Visibility = Visible(_vm.EffectsOpen && !pip);

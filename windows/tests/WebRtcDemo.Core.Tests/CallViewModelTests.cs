@@ -495,6 +495,7 @@ public sealed class CallViewModelTests : IDisposable
     public void Without_a_camera_the_call_still_works()
     {
         _media.LocalResult = new LocalMediaResult(true, false);
+        _media.Cameras = [];
         Join();
         Assert.False(_vm.CameraOn);
         Assert.Equal("No camera found", _toasts[^1].Text);
@@ -504,6 +505,28 @@ public sealed class CallViewModelTests : IDisposable
         Receive(PeerJoined);
         Run(() => _media.RaiseConnection(PeerConnectionState.Connected));
         Assert.Equal("audio=True video=False screen=False", State(MediaStates()[^1]));
+    }
+
+    [Fact]
+    public void A_camera_another_app_had_at_the_start_opens_when_turned_on()
+    {
+        _media.LocalResult = new LocalMediaResult(true, false);
+        _media.CameraOpens = false;
+        ConnectCall();
+        Assert.False(_vm.HasCamera);
+
+        Run(_vm.ToggleCamera);
+        Assert.Equal("SelectCamera(cam-1)", _media.Log[^1]);
+        Assert.Equal("Couldn't open the camera. Another app may be using it.", _toasts[^1].Text);
+        Assert.False(_vm.CameraOn);
+
+        _media.CameraOpens = true;
+        Run(_vm.ToggleCamera);
+        Assert.True(_vm.HasCamera);
+        Assert.True(_vm.CameraOn);
+        Assert.Contains("Camera(True)", _media.Log);
+        Advance(300);
+        Assert.Equal("audio=True video=True screen=False", State(MediaStates()[^1]));
     }
 
     // ---- Remote video ---------------------------------------------------------------------------
