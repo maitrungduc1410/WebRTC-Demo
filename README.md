@@ -26,13 +26,13 @@ Each feature works on every platform. One screenshot per feature is enough to sh
 
 | 1:1 call · iOS | Chat · Android | Face stickers · Android |
 |:---:|:---:|:---:|
-| _To add: `call-ios.png`_ <!-- iPhone in a 1:1 call, portrait: the other person fills the screen, your tile in a corner, toolbar visible. <img src="docs/public/media/call-ios.png" width="220" alt="1:1 call on iOS" /> --> | _To add: `chat-android.png`_ <!-- Android in a 1:1 call with the chat sheet open and a few messages from both sides. <img src="docs/public/media/chat-android.png" width="220" alt="Chat on Android" /> --> | _To add: `sticker-android.png`_ <!-- Android front camera with the crown or headphones sticker, head tilted a little. <img src="docs/public/media/sticker-android.png" width="220" alt="Face sticker on Android" /> --> |
+| <img src="docs/public/media/call-ios.png" width="220" alt="1:1 call on iOS" /> | <img src="docs/public/media/chat-android.png" width="220" alt="Chat on Android" /> | <img src="docs/public/media/sticker-android.png" width="220" alt="Face sticker on Android" /> |
 
 | Group call · Web | Screen sharing · macOS |
 |:---:|:---:|
-| _To add: `group-web.png`_ <!-- Web group call with 4 or 5 people on different platforms: labelled tiles, one speaking ring, one mic-off icon. <img src="docs/public/media/group-web.png" width="400" alt="Group call on the web" /> --> | _To add: `share-macos.png`_ <!-- Mac app with the share picker open, live thumbnails of screens and windows. <img src="docs/public/media/share-macos.png" width="400" alt="Screen sharing on macOS" /> --> |
+| <img src="docs/public/media/group-web.png" width="400" alt="Group call on the web" /> | <img src="docs/public/media/share-macos.png" width="400" alt="Screen sharing on macOS" /> |
 | **Virtual backgrounds · Windows** | **Picture-in-picture · Web** |
-| _To add: `background-windows.png`_ <!-- Windows app with the Backgrounds and effects panel open, you in front of a picture background. <img src="docs/public/media/background-windows.png" width="400" alt="Virtual background on Windows" /> --> | _To add: `pip-web.png`_ <!-- Chrome with another tab in front and the call's floating window on top. <img src="docs/public/media/pip-web.png" width="400" alt="Picture-in-picture on the web" /> --> |
+| <img src="docs/public/media/background-windows.png" width="400" alt="Virtual background on Windows" /> | <img src="docs/public/media/pip-web.png" width="400" alt="Picture-in-picture on the web" /> |
 
 ## Features
 
