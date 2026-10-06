@@ -3,9 +3,9 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import type MarkdownIt from 'markdown-it'
+import { base, describePage, seoHead, siteUrl, sitemapLanguages } from './seo'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const base = '/WebRTC-Demo/'
 const repoUrl = 'https://github.com/maitrungduc1410/WebRTC-Demo'
 
 /**
@@ -239,7 +239,19 @@ export default defineConfig({
   title: 'WebRTC Demo',
   cleanUrls: true,
   lastUpdated: true,
-  head: [['link', { rel: 'icon', type: 'image/png', href: `${base}favicon.png` }]],
+  head: [
+    ['link', { rel: 'icon', type: 'image/png', href: `${base}favicon.png` }],
+    ['link', { rel: 'apple-touch-icon', href: `${base}logo.png` }],
+    ['meta', { name: 'theme-color', content: '#4f46e5' }],
+    ['meta', { name: 'google-site-verification', content: 'tQKWpMESb7_XYCOMCID91lFgoQ4_dt3sqGoXzuRu-ZQ' }],
+    ['meta', { property: 'og:site_name', content: 'WebRTC Demo' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ],
+  sitemap: { hostname: siteUrl, transformItems: sitemapLanguages },
+  transformPageData(pageData, { siteConfig }) {
+    describePage(pageData, siteConfig.srcDir)
+  },
+  transformHead: seoHead,
   markdown: {
     config(md) {
       md.use(repoLinks)
@@ -288,7 +300,8 @@ export default defineConfig({
     root: {
       label: 'English',
       lang: 'en-US',
-      description: 'One WebRTC call, five native apps: how the demo works and how to build your own client.',
+      description:
+        'Open source WebRTC video call demo with native apps for Web, Android, iOS, macOS and Windows. Learn signaling, screen sharing, SFU group calls and E2EE.',
       themeConfig: {
         nav: nav('', en),
         sidebar: sidebar('', en),
@@ -298,7 +311,8 @@ export default defineConfig({
     vi: {
       label: 'Tiếng Việt',
       lang: 'vi-VN',
-      description: 'Một cuộc gọi WebRTC, năm app native: demo hoạt động thế nào và cách tự làm một client.',
+      description:
+        'Demo gọi video WebRTC mã nguồn mở, có app native cho Web, Android, iOS, macOS và Windows. Tìm hiểu signaling, chia sẻ màn hình, gọi nhóm qua SFU và E2EE.',
       themeConfig: {
         nav: nav('/vi', vi),
         sidebar: sidebar('/vi', vi),
@@ -322,7 +336,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '一次 WebRTC 通话，五个原生应用：这个 Demo 如何工作，以及如何实现自己的客户端。',
+      description: '开源的 WebRTC 视频通话 Demo，提供 Web、Android、iOS、macOS 和 Windows 原生应用，讲解信令、屏幕共享、基于 SFU 的多人通话和端到端加密。',
       themeConfig: {
         nav: nav('/zh', zh),
         sidebar: sidebar('/zh', zh),

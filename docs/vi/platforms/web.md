@@ -1,3 +1,8 @@
+---
+title: "Gọi video WebRTC trên trình duyệt với Vue 3"
+description: "Web client Vue 3 chỉ dùng API có sẵn của trình duyệt: getUserMedia, getDisplayMedia, RTCPeerConnection, Insertable Streams và Document Picture-in-Picture."
+---
+
 # Web
 
 Một single-page app viết bằng Vue 3. App chạy trên trình duyệt của máy tính lẫn điện thoại, và chỉ dùng đúng API WebRTC có sẵn của trình duyệt.

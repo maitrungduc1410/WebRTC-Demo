@@ -1,3 +1,8 @@
+---
+title: "WebRTC iOS example in Swift and SwiftUI"
+description: "A native iOS WebRTC video call app in SwiftUI on webrtc-sdk M150, with screen sharing through a Broadcast Extension, E2EE, effects and picture-in-picture."
+---
+
 # iOS
 
 A SwiftUI app with Liquid Glass, on the webrtc-sdk `150.7871.01` binary. iOS 26 or newer, built with Xcode 26.

@@ -1,3 +1,8 @@
+---
+title: "App WebRTC cho Windows với C# và WinUI 3"
+description: "App gọi video WebRTC native cho Windows viết bằng C# và WinUI 3 trên .NET 10, dùng libwebrtc build sẵn qua một C shim nhỏ, chạy trên x64 và ARM64."
+---
+
 # Windows
 
 App WinUI 3 trên .NET 10, dạng unpackaged và self-contained, cho x64 và ARM64. WebRTC là bản prebuilt [webrtc-sdk/libwebrtc](https://github.com/webrtc-sdk/libwebrtc) release `m150.7871.03`, cùng nhánh với SDK của Android và Apple, gọi qua một C shim nhỏ.

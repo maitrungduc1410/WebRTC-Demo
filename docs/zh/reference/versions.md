@@ -1,3 +1,7 @@
+---
+description: "各应用使用的 WebRTC、SDK 和工具版本，以及这个 Demo 有意省略的部分：TURN、断线重连、身份验证和安全的密钥交换。"
+---
+
 # 版本与限制
 
 ## 版本 {#versions}

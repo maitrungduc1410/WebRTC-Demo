@@ -1,3 +1,8 @@
+---
+title: "Tham khảo message signaling WebRTC"
+description: "Toàn bộ message JSON của signaling server và SFU server cho cuộc gọi 1:1 và gọi nhóm, kèm ví dụ và thứ tự gửi."
+---
+
 # Messages
 
 Cả hai server đều nói chuyện bằng text frame JSON trên một WebSocket bình thường ở `/ws`. Mỗi message là một object có trường `type`. Type nào không biết thì bị bỏ qua.

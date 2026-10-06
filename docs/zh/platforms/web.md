@@ -1,3 +1,8 @@
+---
+title: "用 Vue 3 在浏览器中实现 WebRTC 视频通话"
+description: "一个只使用浏览器原生 API 的 Vue 3 WebRTC 客户端：getUserMedia、getDisplayMedia、RTCPeerConnection、Insertable Streams 和 Document Picture-in-Picture。"
+---
+
 # Web
 
 一个 Vue 3 单页应用，可以在桌面和手机浏览器中运行，只使用浏览器自带的 WebRTC API。

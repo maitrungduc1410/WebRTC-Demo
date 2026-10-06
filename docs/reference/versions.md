@@ -1,3 +1,7 @@
+---
+description: "The WebRTC, SDK and tool versions each app uses, and what the demo leaves out on purpose: TURN, reconnects, authentication and secure key exchange."
+---
+
 # Versions and limitations
 
 ## Versions {#versions}

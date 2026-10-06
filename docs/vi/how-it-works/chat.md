@@ -1,3 +1,7 @@
+---
+title: "Chat qua WebRTC data channel"
+---
+
 # Chat
 
 Trong cuộc gọi 1:1, tin nhắn chat đi qua một data channel WebRTC, peer to peer, được DTLS mã hóa giống như media. Server không bao giờ thấy chúng.

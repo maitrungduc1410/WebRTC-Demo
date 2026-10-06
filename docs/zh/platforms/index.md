@@ -1,3 +1,8 @@
+---
+title: "Web、Android、iOS、macOS 和 Windows 上的 WebRTC"
+description: "Web、Android、iOS、macOS 和 Windows 五个应用分别如何实现，各自使用哪个 WebRTC SDK，以及在代码里该看哪里。"
+---
+
 # 平台
 
 五个应用，各自用自己平台的工具编写。它们在不同语言之间不共享代码，共享的只有[约定](/zh/guide/#what-keeps-them-working-together)、[`effects`](gh:effects) 目录和应用图标。iOS 和 macOS 是例外：Mac 应用编译了大部分 iOS 代码。

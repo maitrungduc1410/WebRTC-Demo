@@ -1,3 +1,8 @@
+---
+title: "WebRTC signaling message reference"
+description: "Every JSON message of the signaling server and the SFU server, for 1:1 and group calls, with examples and the order they are sent in."
+---
+
 # Messages
 
 Both servers speak JSON text frames over a plain WebSocket at `/ws`. Every message is an object with a `type`. Unknown types are ignored.

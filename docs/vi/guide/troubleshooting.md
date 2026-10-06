@@ -1,3 +1,8 @@
+---
+title: "Xử lý sự cố WebRTC: kết nối, âm thanh và build"
+description: "Cách xử lý các lỗi hay gặp: không kết nối được server, iOS không có tiếng, Swift package không resolve được, thiếu DLL trên Windows và lỗi khi gọi nhóm."
+---
+
 # Xử lý sự cố
 
 ## Mọi nền tảng {#every-platform}

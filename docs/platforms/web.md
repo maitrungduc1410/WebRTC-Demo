@@ -1,3 +1,8 @@
+---
+title: "WebRTC video call in the browser with Vue 3"
+description: "A Vue 3 WebRTC client built only on browser APIs: getUserMedia, getDisplayMedia, RTCPeerConnection, Insertable Streams and Document Picture-in-Picture."
+---
+
 # Web
 
 A Vue 3 single-page app. It runs in desktop and phone browsers and uses nothing but the browser's own WebRTC API.

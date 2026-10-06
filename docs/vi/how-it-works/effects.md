@@ -1,3 +1,8 @@
+---
+title: "Virtual background và sticker khuôn mặt trong cuộc gọi WebRTC"
+description: "Làm mờ nền, nền ảnh, nền video và sticker bám theo khuôn mặt trên mọi nền tảng, dùng MediaPipe, Apple Vision và ONNX, áp dụng trước khi frame được encode."
+---
+
 # Phông nền và effect
 
 **Backgrounds and effects** (trong More, hoặc phím `B` trên máy tính) hiện một bản xem trước trực tiếp và hai tab: **Backgrounds** (không có, làm mờ nhẹ, làm mờ, ảnh và video lặp) và **Filters** (sticker bám theo khuôn mặt, như tai nghe, vương miện hay kính). Có thể dùng phông nền và sticker cùng lúc.

@@ -1,3 +1,8 @@
+---
+title: "WebRTC 信令详解：offer、answer 与 ICE candidate"
+description: "一步步走完一次 WebRTC 通话：加入房间、SDP offer 与 answer、ICE candidate 和媒体状态，以及信令服务器转发的每一条消息。"
+---
+
 # 信令与建立通话
 
 WebRTC 本身并不规定两端如何找到彼此。在媒体开始传输之前，双方必须通过其他某个通道交换 SDP offer、SDP answer 和 ICE candidate。在这里，这个通道就是连接到一个小型服务器的 WebSocket。

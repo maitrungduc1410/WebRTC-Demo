@@ -1,3 +1,8 @@
+---
+title: "Add backgrounds and stickers, change the app icon"
+description: "Add your own background pictures, videos and face stickers to every app at once, and regenerate the shared app icon."
+---
+
 # Customize
 
 ## Add backgrounds {#add-backgrounds}

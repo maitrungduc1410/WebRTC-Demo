@@ -1,3 +1,8 @@
+---
+title: "WebRTC trên Web, Android, iOS, macOS và Windows"
+description: "Các app Web, Android, iOS, macOS và Windows được viết thế nào, mỗi app dùng WebRTC SDK nào, và nên xem chỗ nào trong code của từng app."
+---
+
 # Nền tảng
 
 Năm app, mỗi app viết bằng công cụ của nền tảng mình. Giữa các ngôn ngữ, chúng không dùng chung dòng code nào, chỉ chung [bản "hợp đồng"](/vi/guide/#what-keeps-them-working-together), thư mục [`effects`](gh:effects) và icon app. Ngoại lệ là iOS và macOS: app Mac compile phần lớn code của iOS.

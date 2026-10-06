@@ -1,3 +1,7 @@
+---
+title: "Turning the camera and mic off in WebRTC without black frames"
+---
+
 # Camera and mic state
 
 A disabled video track doesn't stop sending. It sends black frames. So the other side can't tell "camera off" from "dark room" by looking at the video. Each client reports its own state with a `media state` message instead:

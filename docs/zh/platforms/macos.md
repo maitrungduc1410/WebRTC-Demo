@@ -1,3 +1,8 @@
+---
+title: "WebRTC macOS 应用：SwiftUI 与 ScreenCaptureKit"
+description: "使用 SwiftUI 和 AppKit 编写的 macOS 原生 WebRTC 视频通话应用（不是 Catalyst），用 ScreenCaptureKit 共享屏幕，支持端到端加密、特效和悬浮通话窗口。"
+---
+
 # macOS
 
 一个原生 SwiftUI 应用，SwiftUI 没有对应 API 的地方使用 AppKit，不是 Catalyst。它和 iOS 应用位于同一个 Xcode 工程中，并编译了 iOS 的大部分代码，所以信令、E2EE、特效和多人通话的工作方式与 [iOS](/zh/platforms/ios) 完全相同。要求 macOS 26 或更高版本。

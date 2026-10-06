@@ -1,3 +1,8 @@
+---
+title: "Build a WebRTC client for a new platform: a checklist"
+description: "What a new WebRTC client (Flutter, React Native, Qt, Linux, TV) must do to call the other apps: signaling messages, media state, E2EE frames and the SFU."
+---
+
 # Port to a new platform
 
 This page is for building a sixth client, for example in Flutter, React Native, Qt, on Linux or on a TV, that can call the five existing apps. It lists everything your client has to do, in the order you will probably build it. Tick items off as you go. The list is saved in this browser.

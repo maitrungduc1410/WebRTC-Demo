@@ -1,3 +1,7 @@
+---
+title: "Chat over a WebRTC data channel"
+---
+
 # Chat
 
 In a 1:1 call, chat messages go over a WebRTC data channel, peer to peer, encrypted by DTLS like the media. The server never sees them.

@@ -1,3 +1,8 @@
+---
+title: "Picture-in-picture cho cuộc gọi video trên mọi nền tảng"
+description: "Cách mỗi app giữ cuộc gọi trong cửa sổ nổi: Document Picture-in-Picture trên web, chế độ PiP của Android, AVKit trên iOS, cửa sổ nổi trên macOS và Windows."
+---
+
 # Picture-in-picture
 
 App nào cũng có thể giữ cuộc gọi trong một cửa sổ nhỏ nằm trên các app khác. Mỗi nền tảng có API riêng cho việc này, và những gì chúng cho phép khác nhau rất nhiều.

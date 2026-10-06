@@ -1,3 +1,8 @@
+---
+title: "Mã hóa đầu cuối (E2EE) cho WebRTC với Insertable Streams"
+description: "Mã hóa từng frame WebRTC để SFU chỉ chuyển tiếp ciphertext. Trình duyệt và FrameCryptor native dùng chung một định dạng frame. Thử trực tiếp ngay trên trang."
+---
+
 # Mã hóa đầu cuối
 
 Media của WebRTC luôn được mã hóa theo từng chặng (hop by hop) bằng DTLS-SRTP. Lớp này bảo vệ dữ liệu khi đi trên đường truyền, nhưng media server đứng giữa, như SFU, sẽ giải mã lớp này và đọc được mọi frame. (TURN server thì không sao, nó chỉ chuyển tiếp các packet đã mã hóa.) Mã hóa đầu cuối (E2EE) thêm một lớp thứ hai **ngay trên frame đã encode**, trước khi frame bị chia thành packet, nên relay chỉ thấy được ciphertext.

@@ -1,3 +1,8 @@
+---
+title: "快速开始：几分钟跑通一次 WebRTC 视频通话"
+description: "启动 Node.js 信令服务器，在两个浏览器窗口打开 Web 客户端，完成第一次 WebRTC 通话，再接入 Android、iOS、macOS 或 Windows。"
+---
+
 # 快速开始
 
 1:1 通话只需要信令服务器，再加上两个进入同一房间的客户端。多人通话还需要 SFU 服务器，见[多人通话](/zh/guide/group-calls)。

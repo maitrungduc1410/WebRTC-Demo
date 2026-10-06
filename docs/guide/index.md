@@ -1,3 +1,8 @@
+---
+title: "What is WebRTC Demo? Open source video call apps"
+description: "Open source WebRTC video call app built five times, for the browser, Android, iOS, macOS and Windows. Every app can call the others. Run it and read the code."
+---
+
 # What is this?
 
 WebRTC Demo is one video call app built five times: in the browser, on Android, iOS, macOS and Windows. Each one is a native app written with that platform's own tools, and they all talk to the same small servers. Any client can call any other one.

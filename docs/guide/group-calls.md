@@ -1,3 +1,8 @@
+---
+title: "Run WebRTC group video calls with a Pion SFU"
+description: "Start the optional Go SFU server built on Pion to make WebRTC group calls between the web, Android, iOS, macOS and Windows apps, on a LAN or a cloud VM."
+---
+
 # Group calls
 
 Everything in the [quick start](/guide/quick-start) is enough for 1:1 calls. To call with more people, also start the SFU server. It handles both signaling and media for group calls, so the Node signaling server isn't used in this mode.

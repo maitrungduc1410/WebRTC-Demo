@@ -1,3 +1,7 @@
+---
+title: "通过 WebRTC data channel 聊天"
+---
+
 # 聊天
 
 在 1:1 通话中，聊天消息通过 WebRTC data channel 点对点传输，和媒体一样由 DTLS 加密，服务器完全看不到。

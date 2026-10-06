@@ -1,3 +1,8 @@
+---
+title: "Bắt đầu nhanh: chạy cuộc gọi video WebRTC trong vài phút"
+description: "Chạy signaling server Node.js, mở web client trên hai cửa sổ trình duyệt và thực hiện cuộc gọi WebRTC đầu tiên. Sau đó thêm Android, iOS, macOS hoặc Windows."
+---
+
 # Bắt đầu nhanh
 
 Một cuộc gọi 1:1 cần signaling server và hai client ở cùng một phòng. Cuộc gọi nhóm cần thêm SFU server, xem [Cuộc gọi nhóm](/vi/guide/group-calls).

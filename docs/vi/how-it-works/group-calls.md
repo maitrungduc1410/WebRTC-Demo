@@ -1,3 +1,8 @@
+---
+title: "Gọi nhóm WebRTC qua SFU: so sánh mesh và SFU"
+description: "Vì sao gọi nhóm đi qua SFU thay vì mesh, và cách một SFU nhỏ viết bằng Pion, hai peer connection cho mỗi client và mã hóa đầu cuối phối hợp với nhau."
+---
+
 # Cuộc gọi nhóm (SFU)
 
 Cuộc gọi mặc định là 1:1 và peer to peer. Cuộc gọi nhóm đi qua [`sfu-server`](gh:sfu-server), một Selective Forwarding Unit nhỏ viết riêng cho demo này bằng [Pion](https://github.com/pion/webrtc), chứ không dùng một media server làm sẵn. Client vẫn chỉ dùng API WebRTC chuẩn, không có SDK SFU nào, nên bạn có thể đọc hiểu một cuộc gọi nhóm chạy thế nào từ đầu tới cuối.

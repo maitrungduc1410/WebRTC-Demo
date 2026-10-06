@@ -1,3 +1,8 @@
+---
+title: "WebRTC Demo 是什么？开源视频通话应用"
+description: "一个开源的 WebRTC 视频通话应用，为浏览器、Android、iOS、macOS 和 Windows 各原生实现了一遍，五个应用之间都能互相通话。"
+---
+
 # 这是什么？
 
 WebRTC Demo 是同一个视频通话应用的五个实现：浏览器、Android、iOS、macOS 和 Windows。每一个都是用该平台自身工具编写的原生应用，它们连接同一组小型服务器，任意一个客户端都能呼叫其他任意客户端。

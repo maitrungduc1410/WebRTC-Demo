@@ -1,3 +1,7 @@
+---
+description: "Phiên bản WebRTC, SDK và công cụ mà mỗi app dùng, và những gì demo cố ý bỏ qua: TURN, tự kết nối lại, xác thực và trao đổi key an toàn."
+---
+
 # Phiên bản và giới hạn
 
 ## Phiên bản {#versions}

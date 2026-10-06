@@ -1,3 +1,8 @@
+---
+title: "How a WebRTC video call works, piece by piece"
+description: "How a WebRTC video call fits together: signaling, the SDP offer and answer, ICE candidates, media tracks, data channels, end-to-end encryption and group calls."
+---
+
 # How it works
 
 Two peers join the same room through a small WebSocket signaling server. The server only relays control messages: the SDP offer and answer, ICE candidates and the E2EE key. Audio, video and chat go **directly between the peers** over WebRTC. Google's public STUN server helps each peer find its public address.

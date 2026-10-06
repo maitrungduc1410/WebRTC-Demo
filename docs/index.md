@@ -1,5 +1,7 @@
 ---
 layout: home
+title: "WebRTC Demo: video call apps for Web, Android, iOS, macOS and Windows"
+titleTemplate: false
 
 hero:
   name: WebRTC Demo

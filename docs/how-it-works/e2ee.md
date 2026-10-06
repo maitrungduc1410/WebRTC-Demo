@@ -1,3 +1,8 @@
+---
+title: "WebRTC end-to-end encryption (E2EE) with Insertable Streams"
+description: "Encrypt WebRTC frames end to end so an SFU only forwards ciphertext. The browser and the native FrameCryptor share one frame format. Try it live on the page."
+---
+
 # End-to-end encryption
 
 WebRTC media is always encrypted hop by hop with DTLS-SRTP. That protects it on the wire, but a media server in the middle, like an SFU, ends that encryption and can read every frame. (A TURN server is fine: it only passes the encrypted packets along.) E2EE adds a second layer **on the encoded frame**, before it is split into packets, so a relay only ever sees ciphertext.

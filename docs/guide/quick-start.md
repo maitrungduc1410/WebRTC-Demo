@@ -1,3 +1,8 @@
+---
+title: "Quick start: run a WebRTC video call in minutes"
+description: "Start the Node.js signaling server, open the web client in two browser windows and make your first WebRTC call. Then add Android, iOS, macOS or Windows."
+---
+
 # Quick start
 
 A 1:1 call needs the signaling server and two clients in the same room. Group calls also need the SFU server, see [Group calls](/guide/group-calls).

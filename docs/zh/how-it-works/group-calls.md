@@ -1,3 +1,8 @@
+---
+title: "基于 SFU 的 WebRTC 多人通话：mesh 与 SFU 对比"
+description: "为什么多人通话要走 SFU 而不是 mesh，以及一个小型 Pion SFU、每个客户端两个 PeerConnection 和端到端加密如何配合。"
+---
+
 # 多人通话（SFU）
 
 默认的通话是 1:1 点对点。多人通话则经过 [`sfu-server`](gh:sfu-server)：这是为本 Demo 专门编写的一个小型 SFU（Selective Forwarding Unit），基于 [Pion](https://github.com/pion/webrtc) 实现，而不是直接用现成的媒体服务器。每个客户端依然只使用标准 WebRTC API，不依赖任何 SFU SDK，所以你可以从头到尾看清楚多人通话是怎么运作的。

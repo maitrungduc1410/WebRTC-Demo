@@ -1,3 +1,8 @@
+---
+title: "WebRTC troubleshooting: connection, audio and build problems"
+description: "Fixes for common problems: the server can't be reached, no audio on iOS, Swift packages that fail to resolve, missing Windows DLLs and group call issues."
+---
+
 # Troubleshooting
 
 ## Every platform {#every-platform}

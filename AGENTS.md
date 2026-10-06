@@ -15,6 +15,7 @@ Two call modes:
 - Keep both `docs/` and `ARCHITECTURE.md`: the site is the readable guide, ARCHITECTURE.md is the complete reference that still works without it. A behavior change updates both, in all three languages of the docs.
 - Every docs heading has an explicit `{#id}`, the English slug, kept unchanged in the translations. Link to repository files with `gh:path` (`[x](gh:web/src/e2ee.ts)`). The build fails on a missing file, a missing anchor or a dead page link, so `npm run build` is the check.
 - Media live in `docs/public/media/`. The README uses the same files.
+- SEO lives in `docs/.vitepress/seo.ts`: canonical URL, hreflang, Open Graph and Twitter tags for every page, and the sitemap. A page's `title` and `description` frontmatter are what search results and link previews show, so write them for what people search for ("WebRTC Android example in Kotlin..."), in all three languages; pages without a `description` use their first paragraph. The share images `docs/public/og-image*.png` are drawn by `tools/make_og_images.sh`.
 
 ## Architecture
 

@@ -1,5 +1,7 @@
 ---
 layout: home
+title: "WebRTC Demo：Web、Android、iOS、macOS 和 Windows 视频通话应用"
+titleTemplate: false
 
 hero:
   name: WebRTC Demo

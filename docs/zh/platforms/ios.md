@@ -1,3 +1,8 @@
+---
+title: "WebRTC iOS 示例：Swift 与 SwiftUI"
+description: "基于 webrtc-sdk M150、使用 SwiftUI 编写的 iOS 原生 WebRTC 视频通话应用，通过 Broadcast Extension 共享屏幕，支持端到端加密、特效和系统画中画。"
+---
+
 # iOS
 
 一个使用 Liquid Glass 的 SwiftUI 应用，基于 webrtc-sdk `150.7871.01` 二进制包，要求 iOS 26 或更高版本，用 Xcode 26 构建。

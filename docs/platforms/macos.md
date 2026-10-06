@@ -1,3 +1,8 @@
+---
+title: "WebRTC macOS app in SwiftUI with ScreenCaptureKit"
+description: "A native macOS WebRTC video call app in SwiftUI and AppKit (not Catalyst), with ScreenCaptureKit screen sharing, E2EE, effects and a floating call window."
+---
+
 # macOS
 
 A native SwiftUI app, with AppKit where SwiftUI has no API. It is not Catalyst. It lives in the same Xcode project as the iOS app and compiles most of its code, so signaling, E2EE, effects and group calls work exactly as on [iOS](/platforms/ios). macOS 26 or newer.

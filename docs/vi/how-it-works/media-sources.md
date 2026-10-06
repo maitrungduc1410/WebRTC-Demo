@@ -1,3 +1,8 @@
+---
+title: "Chia sẻ màn hình WebRTC và chuyển nguồn video"
+description: "Chuyển cuộc gọi WebRTC giữa camera, màn hình hoặc cửa sổ và file video bằng cách thay track của sender, nên cuộc gọi và lớp mã hóa vẫn chạy tiếp."
+---
+
 # Chuyển nguồn video
 
 Một cuộc gọi có thể gửi camera, một màn hình hay cửa sổ, một file video, hoặc đầu ra của effect khi đang bật phông nền. Chuyển qua lại giữa các nguồn này không bao giờ renegotiate. Video sender giữ nguyên, chỉ thay thứ cấp frame cho nó.

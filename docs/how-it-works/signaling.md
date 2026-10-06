@@ -1,3 +1,8 @@
+---
+title: "WebRTC signaling explained: offer, answer and ICE candidates"
+description: "Step through a WebRTC call: joining a room, the SDP offer and answer, ICE candidates and media state, with every message the signaling server relays."
+---
+
 # Signaling and call setup
 
 WebRTC doesn't say how two peers find each other. Before any media can flow, they have to swap an SDP offer, an SDP answer and ICE candidates through some other channel. Here that channel is a WebSocket to a small server.

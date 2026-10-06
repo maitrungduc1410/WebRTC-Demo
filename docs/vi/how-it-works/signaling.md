@@ -1,3 +1,8 @@
+---
+title: "Giải thích signaling WebRTC: offer, answer và ICE candidate"
+description: "Đi qua từng bước của một cuộc gọi WebRTC: vào phòng, SDP offer và answer, ICE candidate và media state, kèm mọi message mà signaling server chuyển tiếp."
+---
+
 # Signaling và thiết lập cuộc gọi
 
 WebRTC không quy định hai peer tìm thấy nhau bằng cách nào. Trước khi có media, hai bên phải trao đổi SDP offer, SDP answer và ICE candidate qua một kênh khác. Ở đây kênh đó là một WebSocket tới một server nhỏ.

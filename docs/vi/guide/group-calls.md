@@ -1,3 +1,8 @@
+---
+title: "Chạy cuộc gọi video nhóm WebRTC với SFU Pion"
+description: "Chạy SFU server viết bằng Go trên Pion để gọi nhóm WebRTC giữa các app web, Android, iOS, macOS và Windows, trong mạng LAN hoặc trên cloud VM."
+---
+
 # Cuộc gọi nhóm
 
 Với cuộc gọi 1:1, những gì trong phần [bắt đầu nhanh](/vi/guide/quick-start) là đủ. Muốn gọi với nhiều người hơn, bạn chạy thêm SFU server. Server này lo cả signaling lẫn media cho cuộc gọi nhóm, nên ở chế độ này không dùng tới signaling server Node.

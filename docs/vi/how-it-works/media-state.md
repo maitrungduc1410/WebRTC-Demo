@@ -1,3 +1,7 @@
+---
+title: "Tắt camera và micro trong WebRTC mà không bị màn hình đen"
+---
+
 # Trạng thái camera và micro
 
 Video track bị disable không ngừng gửi. Nó gửi frame đen. Vì vậy chỉ nhìn video thì bên kia không phân biệt được "tắt camera" với "phòng tối". Thay vào đó, mỗi client tự báo trạng thái của mình bằng message `media state`:

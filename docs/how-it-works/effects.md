@@ -1,3 +1,8 @@
+---
+title: "Virtual backgrounds and face stickers in a WebRTC call"
+description: "Blur, picture and video backgrounds plus face-tracked stickers on every platform, with MediaPipe, Apple Vision and ONNX, applied before the frame is encoded."
+---
+
 # Backgrounds and effects
 
 **Backgrounds and effects** (under More, or `B` on desktop) shows a live preview and two tabs: **Backgrounds** (none, slight blur, blur, pictures and looping videos) and **Filters** (stickers that follow your face, like headphones, a crown or glasses). A background and a sticker can be combined.

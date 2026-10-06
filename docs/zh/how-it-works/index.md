@@ -1,3 +1,8 @@
+---
+title: "WebRTC 视频通话是如何工作的"
+description: "逐一拆解一次 WebRTC 视频通话：信令、SDP offer 与 answer、ICE candidate、媒体 track、data channel、端到端加密和多人通话。"
+---
+
 # 工作原理
 
 两端通过一个小型 WebSocket 信令服务器加入同一个房间。服务器只负责中继控制消息：SDP offer 和 answer、ICE candidate 以及 E2EE 密钥。音频、视频和聊天都通过 WebRTC **在两端之间直接传输**。Google 的公共 STUN 服务器帮助每一端获取自己的公网地址。

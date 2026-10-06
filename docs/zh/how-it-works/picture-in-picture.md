@@ -1,3 +1,8 @@
+---
+title: "各平台视频通话的画中画实现"
+description: "各应用如何把视频通话放进悬浮窗口：Web 端的 Document Picture-in-Picture、Android 画中画模式、iOS 的 AVKit，以及 macOS 和 Windows 的悬浮窗口。"
+---
+
 # 画中画
 
 每个应用都能把通话放进一个浮在其他应用之上的小窗口。各平台有各自的 API，能做的事情差别很大。

@@ -1,3 +1,8 @@
+---
+title: "Ví dụ WebRTC Android với Kotlin và Jetpack Compose"
+description: "App gọi video WebRTC native cho Android viết bằng Kotlin và Jetpack Compose trên webrtc-sdk M150, có chia sẻ màn hình, chat, E2EE, effect và picture-in-picture."
+---
+
 # Android
 
 App Kotlin dùng Jetpack Compose và Material 3 Expressive, chạy trên webrtc-sdk `150.7871.01`. Cần Android 7.0 (API 24) trở lên.

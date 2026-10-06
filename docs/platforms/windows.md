@@ -1,3 +1,8 @@
+---
+title: "WebRTC Windows app in C# and WinUI 3"
+description: "A native Windows WebRTC video call app in C# and WinUI 3 on .NET 10, using the prebuilt libwebrtc through a small C shim, for x64 and ARM64."
+---
+
 # Windows
 
 A WinUI 3 app on .NET 10, unpackaged and self-contained, for x64 and ARM64. WebRTC is the prebuilt [webrtc-sdk/libwebrtc](https://github.com/webrtc-sdk/libwebrtc) release `m150.7871.03`, the same branch as the Android and Apple SDKs, reached through a small C shim.

@@ -1,3 +1,8 @@
+---
+title: "Viết client WebRTC cho nền tảng mới: checklist"
+description: "Những gì một client WebRTC mới (Flutter, React Native, Qt, Linux, TV) cần làm để gọi được các app khác: message signaling, media state, frame E2EE và SFU."
+---
+
 # Port sang nền tảng mới
 
 Trang này dành cho ai muốn viết client thứ sáu, ví dụ bằng Flutter, React Native, Qt, trên Linux hay trên TV, mà vẫn gọi được cho năm app hiện có. Dưới đây là mọi việc client của bạn phải làm, xếp theo thứ tự bạn có lẽ sẽ làm. Làm xong mục nào thì tick mục đó. Danh sách được lưu lại trong trình duyệt này.

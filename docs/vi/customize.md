@@ -1,3 +1,8 @@
+---
+title: "Thêm phông nền, sticker và đổi icon app"
+description: "Thêm ảnh nền, video nền và sticker khuôn mặt của riêng bạn cho mọi app cùng lúc, và tạo lại icon dùng chung."
+---
+
 # Tùy biến
 
 ## Thêm phông nền {#add-backgrounds}

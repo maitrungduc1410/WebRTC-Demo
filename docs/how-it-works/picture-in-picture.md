@@ -1,3 +1,8 @@
+---
+title: "Picture-in-picture for video calls on every platform"
+description: "How each app keeps a call in a floating window: Document Picture-in-Picture on the web, Android PiP mode, AVKit on iOS, floating windows on desktop."
+---
+
 # Picture-in-picture
 
 Every app can keep the call in a small window on top of other apps. Each platform has its own API for it, and they differ a lot in what they allow.

@@ -1,3 +1,8 @@
+---
+title: "WebRTC 通话中的虚拟背景与人脸贴纸"
+description: "在各平台实现背景虚化、图片和视频背景以及跟随人脸的贴纸，使用 MediaPipe、Apple Vision 和 ONNX，在帧编码之前完成处理。"
+---
+
 # 背景与特效
 
 **Backgrounds and effects**（在 More 中，桌面端按 `B`）会显示实时预览和两个标签页：**Backgrounds**（无、轻度模糊、模糊、图片和循环视频）和 **Filters**（跟随人脸移动的贴纸，比如耳机、皇冠或眼镜）。背景和贴纸可以同时使用。

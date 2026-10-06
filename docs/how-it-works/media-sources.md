@@ -1,3 +1,8 @@
+---
+title: "WebRTC screen sharing and switching video sources"
+description: "Switch a WebRTC call between the camera, a screen or window and a video file by replacing the sender's track, so the call and its encryption keep running."
+---
+
 # Switching video sources
 
 A call can send the camera, a screen or window, or a video file, and the effects output when a background is on. Switching between them never renegotiates. The video sender stays the same and only what feeds it changes.

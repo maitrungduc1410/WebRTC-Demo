@@ -1,3 +1,8 @@
+---
+title: "Cuộc gọi video WebRTC hoạt động thế nào"
+description: "Các phần của một cuộc gọi video WebRTC ghép với nhau ra sao: signaling, SDP offer và answer, ICE candidate, track, data channel, mã hóa đầu cuối và gọi nhóm."
+---
+
 # Cách hoạt động
 
 Hai peer vào cùng một phòng thông qua một signaling server WebSocket nhỏ. Server chỉ chuyển tiếp các message điều khiển: SDP offer và answer, ICE candidate và key E2EE. Audio, video và chat đi **thẳng giữa hai peer** qua WebRTC. STUN server công khai của Google giúp mỗi peer biết địa chỉ public của mình.

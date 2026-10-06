@@ -1,3 +1,8 @@
+---
+title: "WebRTC group calls with an SFU: mesh vs SFU"
+description: "Why group calls go through an SFU instead of a mesh, and how a small Pion SFU, two peer connections per client and end-to-end encryption work together."
+---
+
 # Group calls (SFU)
 
 The default call is 1:1 and peer to peer. Group calls go through [`sfu-server`](gh:sfu-server), a small Selective Forwarding Unit written for this demo with [Pion](https://github.com/pion/webrtc), instead of a ready-made media server. Every client still uses only standard WebRTC APIs, with no SFU SDK, so you can read how a group call works from end to end.

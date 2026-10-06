@@ -1,3 +1,8 @@
+---
+title: "用 Pion SFU 运行 WebRTC 多人视频通话"
+description: "启动基于 Pion 的 Go SFU 服务器，让 Web、Android、iOS、macOS 和 Windows 应用在局域网或云服务器上进行 WebRTC 多人通话。"
+---
+
 # 多人通话
 
 [快速开始](/zh/guide/quick-start)里的内容足够支撑 1:1 通话。如果要和更多人通话，还需要启动 SFU 服务器。多人通话的信令和媒体都由它负责，所以这种模式下不会用到 Node 信令服务器。

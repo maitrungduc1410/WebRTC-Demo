@@ -1,3 +1,8 @@
+---
+title: "WebRTC Demo là gì? App gọi video mã nguồn mở"
+description: "App gọi video WebRTC mã nguồn mở được viết năm lần, cho trình duyệt, Android, iOS, macOS và Windows. App nào cũng gọi được cho nhau. Chạy thử và đọc code."
+---
+
 # Đây là gì?
 
 WebRTC Demo là một app gọi video được viết năm lần: trên trình duyệt, Android, iOS, macOS và Windows. Mỗi bản là một app native dùng công cụ riêng của nền tảng đó, và tất cả cùng nói chuyện với vài server nhỏ giống nhau. Client nào cũng gọi được cho client nào.

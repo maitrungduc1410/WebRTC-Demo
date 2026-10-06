@@ -1,3 +1,8 @@
+---
+title: "App WebRTC cho macOS với SwiftUI và ScreenCaptureKit"
+description: "App gọi video WebRTC native cho macOS viết bằng SwiftUI và AppKit (không phải Catalyst), chia sẻ màn hình bằng ScreenCaptureKit, có E2EE, effect và cửa sổ nổi."
+---
+
 # macOS
 
 App SwiftUI native, dùng thêm AppKit ở những chỗ SwiftUI không có API. Đây không phải Catalyst. App nằm chung project Xcode với app iOS và compile phần lớn code của nó, nên signaling, E2EE, effect và cuộc gọi nhóm chạy y hệt trên [iOS](/vi/platforms/ios). Cần macOS 26 trở lên.
