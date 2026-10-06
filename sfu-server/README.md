@@ -11,7 +11,7 @@ How it works, with diagrams and the message protocol: [ARCHITECTURE.md, section 
 
 ## Requirements
 
-- [Go](https://go.dev/dl/) 1.24 or newer. With Go 1.21 to 1.23 installed, `go` downloads 1.24 by itself the first time (`GOTOOLCHAIN=auto`, the default).
+- [Go](https://go.dev/dl/) 1.25 or newer. With Go 1.21 to 1.24 installed, `go` downloads 1.25 by itself the first time (`GOTOOLCHAIN=auto`, the default).
 - A machine the phones and browsers can reach on **TCP and UDP port 4001**. On a home or office Wi-Fi, run it on a computer on the same network.
 
 ## Run it
@@ -88,7 +88,7 @@ go run . -public-ip 203.0.113.7
 | `Room is full` | The room already has `-max-participants` people. |
 | `E2EE setting does not match the room` | Someone joined with a different E2EE switch than the person who created the room. |
 | `bind: address already in use` | Another process uses port 4001; stop it or use `-port`. |
-| `go run .` fails on the `go` version in `go.mod` | Your Go is older than 1.21 and cannot download 1.24 by itself; install a newer Go. |
+| `go run .` fails on the `go` version in `go.mod` | Your Go is older than 1.21 and cannot download 1.25 by itself; install a newer Go. |
 
 The server logs every join, leave and published track, prefixed with the room id, which helps to see who is connected.
 

@@ -245,7 +245,7 @@ final class CallViewModel {
     /// Upstream WebRTC defaults to play-and-record in voice chat mode; the webrtc-sdk fork (the
     /// WebRTC Swift package) copies the session's current category and mode instead, solo ambient at
     /// launch, and since M150 adds the Bluetooth HFP option. iOS rejects that pair (OSStatus -50), so
-    /// the audio unit never starts: no microphone and no playout. See README > Troubleshooting.
+    /// the audio unit never starts: no microphone and no playout. See docs/guide/troubleshooting.md.
     private static func configureCallAudio() {
         let config = RTCAudioSessionConfiguration.webRTC()
         config.category = AVAudioSession.Category.playAndRecord.rawValue

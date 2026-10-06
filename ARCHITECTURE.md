@@ -503,7 +503,7 @@ Neither activity locks its orientation. `MainActivity` is recreated on rotation.
 - **Lobby.** When the window is wider than tall and at least 560dp wide, `LobbyScreen` shows the title and the form side by side. Each pane scrolls on its own and stays centered while it fits.
 - **Call chrome.** The top bar, toolbar, chat bubbles, waiting card and the local tile's corners keep clear of `systemBars ∪ displayCutout` on every side, which in landscape puts the cutout and the navigation bar on the left or right. The IME is left out on purpose: it only opens over the chat sheet, and the controls behind it should not move.
 - **Sheets.** The More sheet scrolls, and the chat sheet takes the full height in landscape instead of 70%.
-- **Remote fit.** The default switches to fit when the remote frame and the screen have different orientations; see the README.
+- **Remote fit.** The default switches to fit when the remote frame and the screen have different orientations; see `docs/guide/using-the-app.md`.
 - **Camera.** `Camera2Session` tags every frame with the device rotation, so the peer sees an upright picture whichever way the phone is held. The local tile follows the rotated frame size.
 - **Screen share.** `ScreenCapturerAndroid` keeps the size it started with. `ScreenCaptureService` is still running while the user shares another app, so it receives `onConfigurationChanged` and calls `PeerConnectionClient.onDisplayChanged()`, which resizes the virtual display with `changeCaptureFormat` (`VirtualDisplay.resize` in this SDK, so the MediaProjection is not reused for a second display).
 
@@ -583,7 +583,7 @@ The broadcast keeps going when the user leaves the app, which needs two things:
 - **The app process stays alive.** `UIBackgroundModes` has `audio` and `voip`, and the call keeps an active `playAndRecord` audio session, so iOS does not suspend the app (and its socket server) in the background.
 - **The video encoder keeps working.** H264 is encoded by the VideoToolbox hardware encoder, which iOS invalidates while the app is in the background; every frame then fails and the remote side sees a frozen picture. So iOS always puts **VP8** (software) first in its codec preferences, with or without E2EE.
 
-The audio session is configured by the app, not left to WebRTC: before every call `CallViewModel.configureCallAudio()` sets `RTCAudioSessionConfiguration.webRTC()` to `playAndRecord` + `voiceChat`. The WebRTC Swift package (`webrtc-sdk/Specs`, the webrtc-sdk fork) otherwise copies the session's launch category (`soloAmbient`), which iOS rejects together with the Bluetooth HFP option, leaving calls without microphone and playout (README > Troubleshooting). `AudioSessionWatcher` turns audio unit failures, interruptions and a rejected configuration into toasts.
+The audio session is configured by the app, not left to WebRTC: before every call `CallViewModel.configureCallAudio()` sets `RTCAudioSessionConfiguration.webRTC()` to `playAndRecord` + `voiceChat`. The WebRTC Swift package (`webrtc-sdk/Specs`, the webrtc-sdk fork) otherwise copies the session's launch category (`soloAmbient`), which iOS rejects together with the Bluetooth HFP option, leaving calls without microphone and playout (`docs/guide/troubleshooting.md`). `AudioSessionWatcher` turns audio unit failures, interruptions and a rejected configuration into toasts.
 
 The remote peer's audio can be muted locally ("Peer audio" in the More sheet): `setRemoteAudioEnabled()` disables the audio track of every receiver, including receivers added later by a renegotiation. Nothing is sent to the remote peer. Android does the same in `WebRtcPeer` with the tracks from `onAddTrack`, and web does it with `track.enabled` on the remote stream.
 
@@ -718,7 +718,7 @@ The native `FrameCryptor` uses the LiveKit frame format. The web client implemen
 | H264 | up to and including the first slice NAL header + 1 byte (`...00 00 01 \| NAL type 1 or 5`) | NAL structure and SPS/PPS stay readable; the encrypted part is RBSP-escaped so it never contains a start code |
 | Opus | 1 byte (TOC) | Frame configuration stays readable |
 
-Frames that are empty, or that cannot be encrypted/decrypted (no key yet, wrong key, broken frame), are **dropped**, never forwarded in plain form.
+Frames that cannot be encrypted/decrypted (no key yet, wrong key, broken frame) are **dropped**, never forwarded in plain form. Empty frames (audio DTX) carry nothing to protect and pass through untouched, as in the native cryptor.
 
 ### 9.3 Key derivation and key exchange
 
@@ -1247,7 +1247,7 @@ The Windows engine is C# in `WebRtcDemo.Core/Group` over the C shim, and joins a
 | Jetpack Compose | BOM `2026.06.01`, `material3` `1.5.0-alpha18` | Material 3 Expressive is only in the 1.5 alphas. Newer Compose BOMs need AGP 9.1 and compileSdk 37 |
 | Android Gradle Plugin | `8.13.2`, Gradle `9.5.1`, Kotlin `2.3.0` | compileSdk 36, minSdk 24 |
 | iOS / macOS deployment target | 26.0 | Liquid Glass needs the 26 releases; build with Xcode 26 |
-| sfu-server | Go 1.24, `github.com/pion/webrtc/v4` `v4.2.22`, `github.com/gorilla/websocket` `v1.5.3` | `sfu-server/go.mod`; an older Go downloads 1.24 by itself (`GOTOOLCHAIN=auto`) |
+| sfu-server | Go 1.25, `github.com/pion/webrtc/v4` `v4.2.22`, `github.com/gorilla/websocket` `v1.5.3` | `sfu-server/go.mod`; an older Go downloads 1.25 by itself (`GOTOOLCHAIN=auto`) |
 
 ```text
 signaling-server:  npm install && npm run dev                 (port 4000)

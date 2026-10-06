@@ -8,6 +8,14 @@ Two call modes:
 - **1:1 peer to peer (default).** Needs only `signaling-server/`. Keep this path zero-setup and its code easy to read: it is the main learning material.
 - **Group call through an SFU (optional, advanced).** Needs `sfu-server/` (Go + Pion), which does both signaling and media forwarding. Clients still use only standard WebRTC APIs (no SFU SDK). See ARCHITECTURE.md section 12.
 
+### Documentation
+
+- `README.md` is short on purpose: screenshots, the features table, a quick start and links. Details go to the docs site, not back into the README.
+- `docs/` is the VitePress site (English at the root, `docs/vi/` Vietnamese, `docs/zh/` Chinese), published to GitHub Pages by `.github/workflows/docs.yml`. Run it with `npm install && npm run dev` in `docs`.
+- Keep both `docs/` and `ARCHITECTURE.md`: the site is the readable guide, ARCHITECTURE.md is the complete reference that still works without it. A behavior change updates both, in all three languages of the docs.
+- Every docs heading has an explicit `{#id}`, the English slug, kept unchanged in the translations. Link to repository files with `gh:path` (`[x](gh:web/src/e2ee.ts)`). The build fails on a missing file, a missing anchor or a dead page link, so `npm run build` is the check.
+- Media live in `docs/public/media/`. The README uses the same files.
+
 ## Architecture
 
 ### High-Level Architecture
@@ -76,7 +84,7 @@ The signaling server facilitates the initial peer discovery and exchange of conn
 #### 1b. SFU Server (`sfu-server/`, optional)
 
 **Technology Stack:**
-- Go 1.24, `github.com/pion/webrtc/v4`, `github.com/gorilla/websocket`
+- Go 1.25, `github.com/pion/webrtc/v4`, `github.com/gorilla/websocket`
 
 **Purpose:**
 Group calls (8 per room by default, `-max-participants` / `MAX_PARTICIPANTS`). One process serves the signaling WebSocket at `ws://<host>:4001/ws` and forwards RTP between participants without decoding. All PeerConnections share UDP port 4001.
@@ -556,7 +564,7 @@ Rooms are temporary and in-memory:
 - **Reusability**: Platform-specific wrappers around WebRTC
 - **Error Handling**: Comprehensive error handling for network issues
 - **Logging**: Debug logs for troubleshooting
-- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by every app. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see the README); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`, `StickerPlacement.cs`) in sync across platforms
+- **Shared effects**: Backgrounds and stickers live once in `effects/` at the repository root and are bundled by every app. Add backgrounds through `effects-source/` and `tools/prepare_effects.py` (see `docs/customize.md`); keep the sticker placement code (`placement.ts`, `StickerPlacement.kt`, `StickerPlacement` in `EffectsCatalog.swift`, `StickerPlacement.cs`) in sync across platforms
 
 ### Testing Strategies
 
