@@ -398,6 +398,11 @@ onBeforeUnmount(() => {
   display: block;
 }
 
+/* The dialog sits inside .vp-doc too, so its labels need the same line-height reset as the inline diagram. */
+.content :deep(svg p) {
+  line-height: inherit;
+}
+
 .pad {
   position: absolute;
   right: 16px;

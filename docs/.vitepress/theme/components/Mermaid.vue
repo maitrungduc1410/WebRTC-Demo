@@ -150,6 +150,11 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
   height: auto;
 }
 
+/* Mermaid sizes labels with its own line-height; the 28px from .vp-doc p would make them taller than their boxes. */
+.drawing :deep(svg p) {
+  line-height: inherit;
+}
+
 .actions {
   position: absolute;
   top: 8px;
