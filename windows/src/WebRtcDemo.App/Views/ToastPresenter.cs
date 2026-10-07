@@ -1,3 +1,4 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -8,11 +9,15 @@ using static WebRtcDemo.App.Ui.UiFactory;
 
 namespace WebRtcDemo.App.Views;
 
-/// <summary>Short notices at the top center of the window, a few at a time.</summary>
+/// <summary>Short notices at the top center of the window, a few at a time. A click dismisses one early.</summary>
 internal sealed class ToastPresenter : StackPanel
 {
     private const int MaxVisible = 3;
     private static readonly TimeSpan Duration = TimeSpan.FromSeconds(3.5);
+
+    // A DispatcherQueueTimer that nothing references can be garbage collected before it fires
+    // (a call starting allocates a lot), and its toast would then never go away.
+    private readonly Dictionary<UIElement, DispatcherQueueTimer> _timers = [];
 
     public ToastPresenter()
     {
@@ -20,7 +25,6 @@ internal sealed class ToastPresenter : StackPanel
         VerticalAlignment = VerticalAlignment.Top;
         Margin = new Thickness(16, 60, 16, 0);
         Spacing = 8;
-        IsHitTestVisible = false;
         ChildrenTransitions = [new AddDeleteThemeTransition()];
     }
 
@@ -28,7 +32,7 @@ internal sealed class ToastPresenter : StackPanel
     {
         // The same notice twice in a row (e.g. two quick reconnects) is shown once.
         if (Children.Count > 0 && Children[^1] is FrameworkElement { Tag: string last } && last == toast.Text) return;
-        while (Children.Count >= MaxVisible) Children.RemoveAt(0);
+        while (Children.Count >= MaxVisible) Dismiss(Children[0]);
 
         var accent = toast.Kind switch
         {
@@ -53,12 +57,24 @@ internal sealed class ToastPresenter : StackPanel
             Translation = new System.Numerics.Vector3(0, 0, 24),
             Shadow = new ThemeShadow(),
         };
+        card.Tapped += (_, e) =>
+        {
+            e.Handled = true;
+            Dismiss(card);
+        };
         Children.Add(card);
 
         var timer = DispatcherQueue.CreateTimer();
         timer.Interval = Duration;
         timer.IsRepeating = false;
-        timer.Tick += (_, _) => Children.Remove(card);
+        timer.Tick += (_, _) => Dismiss(card);
+        _timers[card] = timer;
         timer.Start();
+    }
+
+    private void Dismiss(UIElement card)
+    {
+        Children.Remove(card);
+        if (_timers.Remove(card, out var timer)) timer.Stop();
     }
 }
