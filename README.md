@@ -5,20 +5,9 @@
 <p><a href="https://maitrungduc1410.github.io/WebRTC-Demo/"><b>Documentation</b></a> · <a href="https://maitrungduc1410.github.io/WebRTC-Demo/vi/">Tiếng Việt</a> · <a href="https://maitrungduc1410.github.io/WebRTC-Demo/zh/">简体中文</a></p>
 </div>
 
-<!--
-  Media placeholders. Every file goes in docs/public/media/ (the docs site uses the same files).
-  When a file is there, replace the italic line with the <img> tag in the comment next to it.
--->
-
-<!--
-  Demo: GitHub does not play an .mp4 from the repository inside a README. Either drag docs/public/media/demo.mp4
-  into the GitHub editor and paste the user-attachments link it gives you on its own line, or add a short GIF
-  (under 10 MB) as docs/public/media/demo.gif.
-  What to record: 20 to 30 s, two different platforms join the same room, the call connects, one side turns on
-  a background, sends a chat message, then shrinks the call into picture-in-picture.
--->
-<p align="center"><i>Demo recording to add: <code>docs/public/media/demo.gif</code></i></p>
-<!-- <p align="center"><img src="docs/public/media/demo.gif" width="720" alt="Demo" /></p> -->
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/74ec04c3-3ab4-4373-99c5-98ed208a76ba" controls loop muted></video>
+</div>
 
 ## Screenshots
 
