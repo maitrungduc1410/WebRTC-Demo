@@ -7,7 +7,7 @@ description: "基于 webrtc-sdk M150、使用 SwiftUI 编写的 iOS 原生 WebRT
 
 一个使用 Liquid Glass 的 SwiftUI 应用，基于 webrtc-sdk `150.7871.01` 二进制包，要求 iOS 26 或更高版本，用 Xcode 26 构建。
 
-<DemoMedia src="/media/ios-pip.png" :width="320">
+<DemoMedia src="/media/call-ios.png" :width="320">
 iPhone 停留在主屏幕（或另一个应用中），通话显示在系统画中画窗口里，窗口中是对方的视频。
 </DemoMedia>
 

@@ -7,7 +7,7 @@ description: "A native iOS WebRTC video call app in SwiftUI on webrtc-sdk M150, 
 
 A SwiftUI app with Liquid Glass, on the webrtc-sdk `150.7871.01` binary. iOS 26 or newer, built with Xcode 26.
 
-<DemoMedia src="/media/ios-pip.png" :width="320">
+<DemoMedia src="/media/call-ios.png" :width="320">
 An iPhone on the home screen (or in another app) with the call in the system picture-in-picture window, showing the other person's video.
 </DemoMedia>
 

@@ -7,7 +7,7 @@ description: "App gọi video WebRTC native cho iOS viết bằng SwiftUI trên 
 
 App SwiftUI dùng Liquid Glass, chạy trên binary webrtc-sdk `150.7871.01`. Cần iOS 26 trở lên, build bằng Xcode 26.
 
-<DemoMedia src="/media/ios-pip.png" :width="320">
+<DemoMedia src="/media/call-ios.png" :width="320">
 Một iPhone đang ở màn hình chính (hoặc trong app khác), cuộc gọi nằm trong cửa sổ picture-in-picture của hệ thống, hiện video của người kia.
 </DemoMedia>
 
